@@ -121,6 +121,19 @@ Backend compatibility is audited against Actual Budget v26.9.0 at commit
   calendar, due-date projection, paid-transaction matching, status totals, filters and safe schedule actions
 - **Manage** bottom-tab hub for Automation, transaction/data tools and financial setup, with
   general preferences behind a Settings gear and automatic migration of legacy More start-page values
+- **Home** first-class root destination (`Home | Budget | Transactions | Accounts | Manage`) replacing
+  Reports' former bottom-tab slot; a financial command center with Ready to Budget, Favorite
+  Categories, Favorite Accounts, Upcoming, This Month, Reports and Recent Activity sections, each
+  routing into the existing authoritative screen/calculation rather than duplicating it. Reports
+  remains a full destination, reachable from Home and Manage
+- Home section customization (show/hide optional sections, drag-to-reorder, restore defaults) as a
+  versioned, migration-safe local UI preference; reordering mutates in-memory state during the
+  gesture and persists once on drop, not per row crossed
+- App-wide device-local favorites for categories, accounts and report dashboards (`FavoritePreferences`,
+  scoped per budget), shared by the Budget Favorites filter (composes with existing Budget filters),
+  Home's Favorite Categories/Accounts/Reports sections, and the home-screen Favorites widget. This is
+  intentionally local UI preference state, not a synced Actual field, and hidden/deleted/closed
+  entities are filtered out of every surface that reads it
 - Account, category, and category-group rename/close/hide long-press actions
   wired through CRDT mutations and immediate UI refresh
 - Category deletion through Actual-compatible tombstone mutations, with existing

@@ -75,6 +75,8 @@ fun ReportsScreen(
     favoriteReportIds: Set<String> = emptySet(),
     onFavoriteReportChange: (String, Boolean) -> Unit = { _, _ -> },
     scrollToTopRequest: Int = 0,
+    initialPageId: String? = null,
+    initialPageRequest: Int = 0,
 ) {
     val listState = rememberLazyListState()
     var selectedPageId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -82,7 +84,15 @@ fun ReportsScreen(
     val selected = snapshot.dashboards.firstOrNull { it.id == selectedPageId }
         ?: snapshot.dashboards.firstOrNull()
     LaunchedEffect(snapshot.dashboards.map { it.id }) {
-        if (snapshot.dashboards.none { it.id == selectedPageId }) selectedPageId = snapshot.dashboards.firstOrNull()?.id
+        // Dashboards load asynchronously and start empty, including right after process/config
+        // recreation restores selectedPageId; skip the reset until there's something to check
+        // against, or it would immediately discard the restored (or just-requested) selection.
+        if (snapshot.dashboards.isNotEmpty() && snapshot.dashboards.none { it.id == selectedPageId }) {
+            selectedPageId = snapshot.dashboards.firstOrNull()?.id
+        }
+    }
+    LaunchedEffect(initialPageRequest) {
+        if (initialPageRequest > 0) selectedPageId = initialPageId
     }
     LaunchedEffect(scrollToTopRequest) {
         if (scrollToTopRequest > 0) listState.animateScrollToItem(0)

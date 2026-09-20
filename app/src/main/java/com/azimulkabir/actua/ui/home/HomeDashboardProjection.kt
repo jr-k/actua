@@ -6,6 +6,7 @@ import com.azimulkabir.actua.model.Account
 import com.azimulkabir.actua.model.BudgetCategory
 import com.azimulkabir.actua.model.BudgetGroup
 import com.azimulkabir.actua.model.BudgetOverview
+import com.azimulkabir.actua.model.ReportDashboardPage
 import com.azimulkabir.actua.model.Transaction
 
 /**
@@ -17,6 +18,7 @@ data class HomeDashboardProjection(
     val budgetOverview: BudgetOverview,
     val favoriteCategories: List<BudgetCategory>,
     val favoriteAccounts: List<Account>,
+    val favoriteReports: List<ReportDashboardPage>,
     val upcomingSchedules: List<ScheduleListItem>,
     val monthTransactions: List<Transaction>,
     val recentTransactions: List<Transaction>,
@@ -26,6 +28,7 @@ data class HomeDashboardProjection(
             budgetOverview = BudgetOverview(null, 0, 0, 0),
             favoriteCategories = emptyList(),
             favoriteAccounts = emptyList(),
+            favoriteReports = emptyList(),
             upcomingSchedules = emptyList(),
             monthTransactions = emptyList(),
             recentTransactions = emptyList(),
@@ -35,10 +38,12 @@ data class HomeDashboardProjection(
             budgetOverview: BudgetOverview,
             budgetGroups: List<BudgetGroup>,
             accounts: List<Account>,
+            reportDashboards: List<ReportDashboardPage>,
             schedules: List<ScheduleListItem>,
             transactions: List<Transaction>,
             favoriteCategoryIds: Set<String>,
             favoriteAccountIds: Set<String>,
+            favoriteReportIds: Set<String>,
             month: String,
         ): HomeDashboardProjection = HomeDashboardProjection(
             budgetOverview = budgetOverview,
@@ -50,6 +55,7 @@ data class HomeDashboardProjection(
                 .filter { it.id in favoriteCategoryIds }
                 .toList(),
             favoriteAccounts = accounts.filter { !it.closed && it.id in favoriteAccountIds },
+            favoriteReports = reportDashboards.filter { it.id in favoriteReportIds },
             upcomingSchedules = schedules,
             monthTransactions = transactions.filter { it.date.startsWith(month) },
             recentTransactions = transactions.take(10),

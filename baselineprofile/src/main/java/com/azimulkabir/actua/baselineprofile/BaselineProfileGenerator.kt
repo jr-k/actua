@@ -46,6 +46,8 @@ class BaselineProfileGenerator {
         scrollMainList()
 
         navigateToTab("Home")
+        scrollMainList()
+
         navigateToTab("Manage")
         navigateToTab("Budget")
         scrollMainList()

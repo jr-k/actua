@@ -10,6 +10,20 @@ All notable user-facing changes to Actua are recorded here. Releases use calenda
 
 - Added Home customization: reorder Home's sections with a drag handle or the accessible up/down arrows, show or hide any optional section (Favorite Categories, Favorite Accounts, Upcoming, This Month, Reports, Recent Activity), and restore the default layout, from a new "Customize Home" entry on the Home app bar and Settings → Home. Ready to Budget stays pinned first and can't be hidden, since it's Home's primary purpose. The layout is a device-local UI preference (not synced budget data), persisted once per committed change rather than on every drag step, and newly introduced sections are appended deterministically instead of disturbing a saved layout
 
+## [1.0.0-beta.34] - 2026-09-20
+
+### Added
+
+- Added a new **Home** tab, replacing Reports in the bottom navigation (now Home | Budget | Transactions | Accounts | Manage): a financial overview with Ready to Budget, Favorite Categories, Favorite Accounts, Upcoming, This Month, Reports and Recent Activity sections, each routing straight into its full screen. Reports remains fully available and reachable from both Home and Manage; a start page previously set to Reports migrates automatically to Home
+- Added app-wide favorites for categories, accounts and report dashboards: star a category, account or report from its own screen and it shows up in Home's Favorite Categories/Accounts sections and in a new **Favorites** filter on Budget (composes with Budget's existing filters instead of replacing them) and continues to power the existing Favourite Categories widget. Favorites are a device-local preference, not synced budget data, and hidden/deleted/closed entries are filtered out automatically everywhere they'd otherwise appear
+- Added Home customization: reorder Home's sections with a drag handle or the accessible up/down arrows, show or hide any optional section (Favorite Categories, Favorite Accounts, Upcoming, This Month, Reports, Recent Activity), and restore the default layout, from a new "Customize Home" entry on the Home app bar and Settings → Home. Ready to Budget stays pinned first and can't be hidden, since it's Home's primary purpose. The layout is a device-local UI preference (not synced budget data), persisted once per committed change rather than on every drag step, and newly introduced sections are appended deterministically instead of disturbing a saved layout
+- Added an Add Transaction shortcut to the Home tab (previously Home had no way to add a transaction at all) and individual shortcuts for favorited reports in Home's Reports section, routing directly to that report instead of only a generic "view all" link
+
+### Changed
+
+- Sped up cold startup by deferring non-critical maintenance work (credit-card reminder refresh, periodic sync registration, widget discovery) off the main thread and until after first composition, instead of running it before/alongside first render
+- Polished transition performance across navigation, sheets, reconciliation, settings and Budget: full-screen and sheet transitions now animate transform/alpha only instead of interpolating changing layout bounds, and repeated Budget rows and filter/overview controls use lighter-weight animations instead of expand/shrink layout animation
+
 ## [1.0.0-beta.33] - 2026-09-19
 
 ### Added
