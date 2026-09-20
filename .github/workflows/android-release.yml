@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
 jobs:
   check-version-bump:
     if: github.event_name == 'push'
@@ -73,8 +77,8 @@ jobs:
         run: ./gradlew --no-daemon assembleRelease testInstrumentedUnitTest lintDebug
       - name: Verify release signature
         run: |
-          BUILD_TOOLS_VERSION="$(ls "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -1)"
-          "$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+          BUILD_TOOLS_PATH="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n 1)"
+          "$BUILD_TOOLS_PATH/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
       - name: Read release version
         id: version
         run: |
@@ -177,16 +181,16 @@ jobs:
           test -s release-notes.md
       - name: Prepare testing APK
         run: cp app/build/outputs/apk/release/app-release.apk "Actua-v${{ steps.version.outputs.name }}.apk"
-      - name: Publish GitHub prerelease
+      - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
-          prerelease: true
+          prerelease: false
           tag_name: v${{ steps.version.outputs.name }}
           name: Actua ${{ steps.version.outputs.name }}
           target_commitish: ${{ github.sha }}
           body_path: release-notes.md
           files: Actua-v${{ steps.version.outputs.name }}.apk
-      - name: Notify Discord about prerelease
+      - name: Notify Discord about release
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_BETA_WEBHOOK }}
           RELEASE_VERSION: ${{ steps.version.outputs.name }}
@@ -201,7 +205,8 @@ jobs:
 
           webhook = os.environ.get("DISCORD_WEBHOOK", "")
           if not webhook:
-              raise SystemExit("DISCORD_BETA_WEBHOOK is not configured")
+              print("DISCORD_BETA_WEBHOOK is not configured; skipping notification")
+              raise SystemExit(0)
 
           version = os.environ["RELEASE_VERSION"]
           repo = os.environ["REPOSITORY"]
@@ -229,7 +234,7 @@ jobs:
               "username": "Actua Releases",
               "allowed_mentions": {"parse": []},
               "embeds": [{
-                  "title": f"Actua beta released: {tag}"[:256],
+                  "title": f"Actua released: {tag}"[:256],
                   "url": release_url,
                   "description": description[:4096],
                   "color": 0xD29922,
@@ -250,5 +255,5 @@ jobs:
               raise SystemExit(f"Discord returned HTTP {error.code}") from None
           except (urllib.error.URLError, TimeoutError):
               raise SystemExit("Could not reach Discord beta webhook") from None
-          print(f"Discord prerelease notification sent for {tag}")
+          print(f"Discord release notification sent for {tag}")
           PY
