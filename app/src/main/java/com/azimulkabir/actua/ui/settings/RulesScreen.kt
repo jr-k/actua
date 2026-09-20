@@ -37,9 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.rules.Rule
 import com.azimulkabir.actua.data.rules.RuleChoice
 import com.azimulkabir.actua.data.rules.RuleEditorData
@@ -63,21 +66,24 @@ fun RulesScreen(
     var search by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Rule?>(null) }
     Column(modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Rules", onBack = onBack) {
-            if (supported) IconButton(onClick = { editing = Rule.empty() }) { Icon(Icons.Outlined.Add, "Add rule") }
+        ActuaScreenHeader(title = stringResource(R.string.fs_rules_title), onBack = onBack) {
+            if (supported) IconButton(onClick = { editing = Rule.empty() }) { Icon(Icons.Outlined.Add, stringResource(R.string.fs_add_rule)) }
         }
         if (!supported) {
             Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center) {
-                Text("Rules unavailable", style = MaterialTheme.typography.titleMedium)
-                Text("This budget does not contain Actual's rules table.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.fs_rules_unavailable), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.fs_rules_unavailable_message), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             return@Column
         }
-        OutlinedTextField(search, { search = it }, label = { Text("Search rules") }, singleLine = true,
+        OutlinedTextField(search, { search = it }, label = { Text(stringResource(R.string.fs_search_rules)) }, singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
         val names = editorData.names
-        val filtered = rules.filter { ruleSummary(it, names).contains(search, true) }
+        val filtered = mutableListOf<Rule>()
+        for (rule in rules) {
+            if (ruleSummary(rule, names).contains(search, true)) filtered += rule
+        }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             filtered.forEach { rule ->
@@ -85,22 +91,22 @@ fun RulesScreen(
                     shape = MaterialTheme.shapes.large) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(rule.stage.name, style = MaterialTheme.typography.labelSmall,
+                            Text(stageLabel(rule.stage), style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            if (rule.id in scheduleOwnedRuleIds) Text("  •  SCHEDULE", style = MaterialTheme.typography.labelSmall,
+                            if (rule.id in scheduleOwnedRuleIds) Text("  •  ${stringResource(R.string.fs_schedule_badge)}", style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text("IF", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.fs_if), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         rule.conditions.forEachIndexed { index, condition ->
-                            Text((if (index > 0) "${rule.conditionsOp.name.lowercase()} " else "") + conditionSummary(condition, names),
+                            Text((if (index > 0) "${conditionsOpLabel(rule.conditionsOp)} " else "") + conditionSummary(condition, names),
                                 style = MaterialTheme.typography.bodyMedium)
                         }
-                        Text("THEN", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.fs_then), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         rule.actions.forEach { Text(actionSummary(it, names), style = MaterialTheme.typography.bodyMedium) }
                     }
                 }
             }
-            if (filtered.isEmpty()) Text(if (search.isBlank()) "No rules yet" else "No matching rules",
+            if (filtered.isEmpty()) Text(stringResource(if (search.isBlank()) R.string.fs_no_rules else R.string.fs_no_matching_rules),
                 modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(20.dp))
         }
@@ -120,21 +126,21 @@ private fun RuleEditor(rule: Rule, data: RuleEditorData, scheduleOwned: Boolean,
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (rule.conditions.isEmpty() && rule.actions.isEmpty()) "New rule" else "Edit rule",
+            Text(stringResource(if (rule.conditions.isEmpty() && rule.actions.isEmpty()) R.string.fs_new_rule else R.string.fs_edit_rule),
                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("Stage", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.fs_stage), style = MaterialTheme.typography.labelLarge)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Rule.Stage.entries.forEach { stage -> FilterChip(selected = draft.stage == stage,
-                    onClick = { draft = draft.copy(stage = stage) }, label = { Text(stage.name.lowercase().replaceFirstChar(Char::uppercase)) }) }
+                    onClick = { draft = draft.copy(stage = stage) }, label = { Text(stageLabel(stage)) }) }
             }
-            Text("Match", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.fs_match), style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(draft.conditionsOp == Rule.ConditionsOp.AND,
-                    { draft = draft.copy(conditionsOp = Rule.ConditionsOp.AND) }, { Text("All conditions") })
+                    { draft = draft.copy(conditionsOp = Rule.ConditionsOp.AND) }, { Text(stringResource(R.string.fs_all_conditions)) })
                 FilterChip(draft.conditionsOp == Rule.ConditionsOp.OR,
-                    { draft = draft.copy(conditionsOp = Rule.ConditionsOp.OR) }, { Text("Any condition") })
+                    { draft = draft.copy(conditionsOp = Rule.ConditionsOp.OR) }, { Text(stringResource(R.string.fs_any_condition)) })
             }
-            Text("If", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.fs_if_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             draft.conditions.forEachIndexed { index, condition ->
                 ConditionEditor(condition, data, onChange = { changed ->
                     draft = draft.copy(conditions = draft.conditions.toMutableList().also { it[index] = changed })
@@ -142,9 +148,9 @@ private fun RuleEditor(rule: Rule, data: RuleEditorData, scheduleOwned: Boolean,
             }
             TextButton(onClick = { draft = draft.copy(conditions = draft.conditions +
                 Rule.Condition("is", "imported_payee", RuleValue.Text(""))) }) {
-                Icon(Icons.Outlined.Add, null); Text("Add condition")
+                Icon(Icons.Outlined.Add, null); Text(stringResource(R.string.fs_add_condition))
             }
-            Text("Then", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.fs_then_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             draft.actions.forEachIndexed { index, action ->
                 ActionEditor(action, data, onChange = { changed ->
                     draft = draft.copy(actions = draft.actions.toMutableList().also { it[index] = changed })
@@ -152,15 +158,15 @@ private fun RuleEditor(rule: Rule, data: RuleEditorData, scheduleOwned: Boolean,
             }
             TextButton(onClick = { draft = draft.copy(actions = draft.actions +
                 Rule.Action("set", "category", RuleValue.Null)) }) {
-                Icon(Icons.Outlined.Add, null); Text("Add action")
+                Icon(Icons.Outlined.Add, null); Text(stringResource(R.string.fs_add_action))
             }
             HorizontalDivider()
             Button(onClick = { onSave(draft) }, enabled = draft.conditions.isNotEmpty() && draft.actions.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth()) { Text("Save rule") }
+                modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.fs_save_rule)) }
             if (!scheduleOwned && rule.conditions.isNotEmpty()) TextButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Delete, null); Text("Delete rule")
+                Icon(Icons.Outlined.Delete, null); Text(stringResource(R.string.fs_delete_rule))
             }
-            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.fs_cancel)) }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -172,13 +178,13 @@ private fun ConditionEditor(condition: Rule.Condition, data: RuleEditorData,
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SelectField(RuleSchema.fieldLabel(condition.field), RuleSchema.conditionFields.map { it to RuleSchema.fieldLabel(it) }) { field ->
+                SelectField(ruleFieldLabel(condition.field), RuleSchema.conditionFields.map { it to ruleFieldLabel(it) }) { field ->
                     val op = RuleSchema.validOps(field).firstOrNull() ?: "is"
                     onChange(condition.copy(field = field, op = op, value = defaultValue(field, op), options = emptyMap()))
                 }
-                Spacer(Modifier.weight(1f)); IconButton(onClick = onRemove) { Icon(Icons.Outlined.Delete, "Remove condition") }
+                Spacer(Modifier.weight(1f)); IconButton(onClick = onRemove) { Icon(Icons.Outlined.Delete, stringResource(R.string.fs_remove_condition)) }
             }
-            SelectField(RuleSchema.opLabel(condition.op), RuleSchema.validOps(condition.field).map { it to RuleSchema.opLabel(it) }) { op ->
+            SelectField(ruleOpLabel(condition.op), RuleSchema.validOps(condition.field).map { it to ruleOpLabel(it) }) { op ->
                 onChange(condition.copy(op = op, value = defaultValue(condition.field, op)))
             }
             if (condition.op !in setOf("onBudget", "offBudget")) RuleValueEditor(condition.field, condition.op,
@@ -193,19 +199,19 @@ private fun ActionEditor(action: Rule.Action, data: RuleEditorData,
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SelectField(RuleSchema.opLabel(action.op), listOf("set", "prepend-notes", "append-notes", "delete-transaction")
-                    .map { it to RuleSchema.opLabel(it) }) { op ->
+                SelectField(ruleOpLabel(action.op), listOf("set", "prepend-notes", "append-notes", "delete-transaction")
+                    .map { it to ruleOpLabel(it) }) { op ->
                     onChange(when (op) {
                         "set" -> Rule.Action(op, "category", RuleValue.Null)
                         "delete-transaction" -> Rule.Action(op, null, RuleValue.Null)
                         else -> Rule.Action(op, "notes", RuleValue.Text(""))
                     })
                 }
-                Spacer(Modifier.weight(1f)); IconButton(onClick = onRemove) { Icon(Icons.Outlined.Delete, "Remove action") }
+                Spacer(Modifier.weight(1f)); IconButton(onClick = onRemove) { Icon(Icons.Outlined.Delete, stringResource(R.string.fs_remove_action)) }
             }
             if (action.op == "set") {
                 val field = action.field ?: "category"
-                SelectField(RuleSchema.fieldLabel(field), RuleSchema.actionFields.map { it to RuleSchema.fieldLabel(it) }) {
+                SelectField(ruleFieldLabel(field), RuleSchema.actionFields.map { it to ruleFieldLabel(it) }) {
                     onChange(action.copy(field = it, value = defaultValue(it, "is"), options = emptyMap()))
                 }
                 RuleValueEditor(field, "is", action.value, action.options, data) { value, options ->
@@ -213,7 +219,7 @@ private fun ActionEditor(action: Rule.Action, data: RuleEditorData,
                 }
             } else if (action.op != "delete-transaction") {
                 OutlinedTextField(action.value.text.orEmpty(), { onChange(action.copy(value = RuleValue.Text(it))) },
-                    label = { Text("Text") }, modifier = Modifier.fillMaxWidth())
+                    label = { Text(stringResource(R.string.fs_text)) }, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -224,25 +230,39 @@ private fun RuleValueEditor(field: String, op: String, value: RuleValue, options
     data: RuleEditorData, onChange: (RuleValue, Map<String, RuleValue>) -> Unit) {
     val choices = when (field) { "account" -> data.accounts; "payee" -> data.payees; "category" -> data.categories;
         "category_group" -> data.categoryGroups; else -> emptyList() }
+    val unknownName = stringResource(when (field) {
+        "account" -> R.string.fs_unknown_account
+        "payee" -> R.string.fs_unknown_payee
+        else -> R.string.common_unknown
+    })
+    val displayChoices = choices.map { choice ->
+        choice.copy(name = choice.name.ifBlank { unknownName })
+    }
     when (RuleSchema.type(field)) {
         RuleFieldType.ID -> {
-            if (op in setOf("oneOf", "notOneOf")) MultiChoice(value.list.orEmpty(), choices) { onChange(RuleValue.ListValue(it), options) }
-            else SelectField(data.names[value.text] ?: choices.firstOrNull { it.id == value.text }?.name ?: "Select value",
-                choices.map { it.id to it.name }) { onChange(RuleValue.Text(it), options) }
+            if (op in setOf("oneOf", "notOneOf")) MultiChoice(value.list.orEmpty(), displayChoices) { onChange(RuleValue.ListValue(it), options) }
+            else {
+                val selectedName = data.names[value.text]
+                    ?: choices.firstOrNull { it.id == value.text }?.name
+                SelectField(
+                    selectedName?.ifBlank { unknownName } ?: stringResource(R.string.fs_select_value),
+                    displayChoices.map { it.id to it.name },
+                ) { onChange(RuleValue.Text(it), options) }
+            }
         }
         RuleFieldType.BOOLEAN -> Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Value", Modifier.weight(1f)); Switch(value.flag == true, { onChange(RuleValue.Flag(it), options) })
+            Text(stringResource(R.string.fs_value), Modifier.weight(1f)); Switch(value.flag == true, { onChange(RuleValue.Flag(it), options) })
         }
         RuleFieldType.NUMBER -> {
             if (op == "isbetween") {
                 val map = (value as? RuleValue.ObjectValue)?.value.orEmpty()
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NumberInput("From", map["num1"]?.number, Modifier.weight(1f)) { a -> onChange(RuleValue.ObjectValue(map + ("num1" to RuleValue.Number(a))), options) }
-                    NumberInput("To", map["num2"]?.number, Modifier.weight(1f)) { b -> onChange(RuleValue.ObjectValue(map + ("num2" to RuleValue.Number(b))), options) }
+                    NumberInput(stringResource(R.string.fs_from), map["num1"]?.number, Modifier.weight(1f)) { a -> onChange(RuleValue.ObjectValue(map + ("num1" to RuleValue.Number(a))), options) }
+                    NumberInput(stringResource(R.string.fs_to), map["num2"]?.number, Modifier.weight(1f)) { b -> onChange(RuleValue.ObjectValue(map + ("num2" to RuleValue.Number(b))), options) }
                 }
-            } else NumberInput("Amount", value.number, Modifier.fillMaxWidth()) { onChange(RuleValue.Number(it), options) }
+            } else NumberInput(stringResource(R.string.fs_amount), value.number, Modifier.fillMaxWidth()) { onChange(RuleValue.Number(it), options) }
             if (field == "amount" && op != "isbetween") Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Any" to null, "Outflow" to "outflow", "Inflow" to "inflow").forEach { (label, key) ->
+                listOf(stringResource(R.string.fs_any) to null, stringResource(R.string.fs_outflow) to "outflow", stringResource(R.string.fs_inflow) to "inflow").forEach { (label, key) ->
                     val selected = if (key == null) options["outflow"]?.flag != true && options["inflow"]?.flag != true else options[key]?.flag == true
                     FilterChip(selected, { onChange(value, key?.let { mapOf(it to RuleValue.Flag(true)) }.orEmpty()) }, { Text(label) })
                 }
@@ -253,7 +273,7 @@ private fun RuleValueEditor(field: String, op: String, value: RuleValue, options
             else value.text.orEmpty(), { text ->
             onChange(if (op in setOf("oneOf", "notOneOf")) RuleValue.ListValue(text.split(',').map { RuleValue.Text(it.trim()) }.filter { it.value.isNotEmpty() })
                 else RuleValue.Text(text), options)
-        }, label = { Text(if (field == "date") "Date (YYYY-MM-DD)" else if (op == "matches") "Regular expression" else "Value") },
+        }, label = { Text(stringResource(if (field == "date") R.string.fs_date_iso_hint else if (op == "matches") R.string.fs_regular_expression else R.string.fs_value)) },
             modifier = Modifier.fillMaxWidth())
     }
 }
@@ -270,7 +290,8 @@ private fun MultiChoice(selected: List<RuleValue>, choices: List<RuleChoice>, on
     var open by remember { mutableStateOf(false) }
     val ids = selected.mapNotNull { it.text }.toSet()
     Box {
-        TextButton(onClick = { open = true }) { Text(if (ids.isEmpty()) "Select values" else "${ids.size} selected") }
+        TextButton(onClick = { open = true }) { Text(if (ids.isEmpty()) stringResource(R.string.fs_select_values)
+            else pluralStringResource(R.plurals.fs_values_selected, ids.size, ids.size)) }
         DropdownMenu(open, { open = false }) { choices.forEach { choice ->
             DropdownMenuItem(text = { Text(choice.name) }, leadingIcon = { Checkbox(choice.id in ids, null) }, onClick = {
                 val updated = if (choice.id in ids) ids - choice.id else ids + choice.id
@@ -300,25 +321,95 @@ private fun defaultValue(field: String, op: String): RuleValue = when {
     else -> RuleValue.Null
 }
 
-private fun ruleSummary(rule: Rule, names: Map<String, String>) =
-    (rule.conditions.map { conditionSummary(it, names) } + rule.actions.map { actionSummary(it, names) }).joinToString(" ")
-
-private fun conditionSummary(condition: Rule.Condition, names: Map<String, String>) =
-    "${RuleSchema.fieldLabel(condition.field)} ${RuleSchema.opLabel(condition.op)} ${valueLabel(condition.value, names)}".trim()
-
-private fun actionSummary(action: Rule.Action, names: Map<String, String>) = when (action.op) {
-    "set" -> "Set ${action.field?.let(RuleSchema::fieldLabel).orEmpty()} to ${valueLabel(action.value, names)}"
-    "prepend-notes" -> "Prepend to notes ${action.value.text.orEmpty()}"
-    "append-notes" -> "Append to notes ${action.value.text.orEmpty()}"
-    "delete-transaction" -> "Delete transaction"
-    else -> RuleSchema.opLabel(action.op)
+@Composable
+private fun ruleSummary(rule: Rule, names: Map<String, String>): String {
+    val summaries = mutableListOf<String>()
+    for (condition in rule.conditions) summaries += conditionSummary(condition, names)
+    for (action in rule.actions) summaries += actionSummary(action, names)
+    return summaries.joinToString(" ")
 }
 
+@Composable
+private fun conditionSummary(condition: Rule.Condition, names: Map<String, String>) =
+    stringResource(R.string.fs_rule_condition_summary, ruleFieldLabel(condition.field),
+        ruleOpLabel(condition.op), valueLabel(condition.value, names)).trim()
+
+@Composable
+private fun actionSummary(action: Rule.Action, names: Map<String, String>) = when (action.op) {
+    "set" -> stringResource(R.string.fs_rule_action_set,
+        action.field?.let { ruleFieldLabel(it) }.orEmpty(), valueLabel(action.value, names))
+    "prepend-notes" -> stringResource(R.string.fs_rule_action_prepend, action.value.text.orEmpty())
+    "append-notes" -> stringResource(R.string.fs_rule_action_append, action.value.text.orEmpty())
+    "delete-transaction" -> stringResource(R.string.fs_rule_action_delete)
+    else -> ruleOpLabel(action.op)
+}
+
+@Composable
 private fun valueLabel(value: RuleValue, names: Map<String, String>): String = when (value) {
     is RuleValue.Text -> names[value.value] ?: value.value
     is RuleValue.Number -> "%.2f".format(value.value / 100.0)
-    is RuleValue.Flag -> value.value.toString()
-    is RuleValue.ListValue -> value.value.joinToString(", ") { valueLabel(it, names) }
-    is RuleValue.ObjectValue -> value.value.values.joinToString(" – ") { valueLabel(it, names) }
+    is RuleValue.Flag -> stringResource(if (value.value) R.string.fs_boolean_true else R.string.fs_boolean_false)
+    is RuleValue.ListValue -> {
+        val labels = mutableListOf<String>()
+        for (item in value.value) labels += valueLabel(item, names)
+        labels.joinToString(", ")
+    }
+    is RuleValue.ObjectValue -> {
+        val labels = mutableListOf<String>()
+        for (item in value.value.values) labels += valueLabel(item, names)
+        labels.joinToString(" – ")
+    }
     RuleValue.Null -> ""
 }
+
+@Composable
+private fun stageLabel(stage: Rule.Stage) = stringResource(when (stage) {
+    Rule.Stage.PRE -> R.string.fs_stage_pre
+    Rule.Stage.DEFAULT -> R.string.fs_stage_default
+    Rule.Stage.POST -> R.string.fs_stage_post
+})
+
+@Composable
+private fun conditionsOpLabel(op: Rule.ConditionsOp) =
+    stringResource(if (op == Rule.ConditionsOp.AND) R.string.fs_and else R.string.fs_or)
+
+@Composable
+private fun ruleFieldLabel(field: String) = stringResource(when (field) {
+    "imported_payee" -> R.string.fs_rule_field_imported_payee
+    "account" -> R.string.fs_rule_field_account
+    "category" -> R.string.fs_rule_field_category
+    "category_group" -> R.string.fs_rule_field_category_group
+    "date" -> R.string.fs_rule_field_date
+    "payee" -> R.string.fs_rule_field_payee
+    "payee_name" -> R.string.fs_rule_field_payee_name
+    "notes" -> R.string.fs_rule_field_notes
+    "amount", "amount-inflow", "amount-outflow" -> R.string.fs_rule_field_amount
+    "cleared" -> R.string.fs_rule_field_cleared
+    else -> R.string.fs_value
+})
+
+@Composable
+private fun ruleOpLabel(op: String) = stringResource(when (op) {
+    "is" -> R.string.fs_rule_op_is
+    "isNot" -> R.string.fs_rule_op_is_not
+    "oneOf" -> R.string.fs_rule_op_one_of
+    "notOneOf" -> R.string.fs_rule_op_not_one_of
+    "isapprox" -> R.string.fs_rule_op_is_approx
+    "isbetween" -> R.string.fs_rule_op_is_between
+    "contains" -> R.string.fs_rule_op_contains
+    "doesNotContain" -> R.string.fs_rule_op_does_not_contain
+    "matches" -> R.string.fs_rule_op_matches
+    "hasTags" -> R.string.fs_rule_op_has_all_tags
+    "hasAnyTag" -> R.string.fs_rule_op_has_any_tag
+    "onBudget" -> R.string.fs_rule_op_on_budget
+    "offBudget" -> R.string.fs_rule_op_off_budget
+    "gt" -> R.string.fs_rule_op_greater
+    "gte" -> R.string.fs_rule_op_greater_equal
+    "lt" -> R.string.fs_rule_op_less
+    "lte" -> R.string.fs_rule_op_less_equal
+    "set" -> R.string.fs_rule_op_set
+    "prepend-notes" -> R.string.fs_rule_op_prepend_notes
+    "append-notes" -> R.string.fs_rule_op_append_notes
+    "delete-transaction" -> R.string.fs_rule_op_delete_transaction
+    else -> R.string.fs_value
+})

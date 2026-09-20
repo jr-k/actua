@@ -14,6 +14,7 @@ import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.ActuaRepository
 import com.azimulkabir.actua.data.preferences.DisplayPreferences
 import com.azimulkabir.actua.data.preferences.FavoritePreferences
+import com.azimulkabir.actua.data.preferences.withAppLanguage
 import com.azimulkabir.actua.data.budget.ActiveBudgetStore
 import com.azimulkabir.actua.data.schedules.ActualScheduleSummary
 import com.azimulkabir.actua.data.schedules.DayDate
@@ -27,6 +28,7 @@ import com.azimulkabir.actua.ui.components.NumberDisplay
 import com.azimulkabir.actua.ui.components.formatMoneyCents
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.Executors
 
 object WidgetActions {
@@ -109,7 +111,8 @@ abstract class ActuaWidgetProvider : AppWidgetProvider() {
         val pending = goAsync()
         EXECUTOR.execute {
             try {
-                widgetIds.forEach { WidgetUpdater.update(context, manager, it, this) }
+                val localizedContext = context.withAppLanguage()
+                widgetIds.forEach { WidgetUpdater.update(localizedContext, manager, it, this) }
             } finally {
                 pending.finish()
             }
@@ -201,6 +204,10 @@ object WidgetUpdater {
             R.layout.widget_budget_snapshot
         }
         val views = RemoteViews(context.packageName, layout)
+        views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_budget_snapshot))
+        views.setTextViewText(R.id.widget_ready_label, context.getString(R.string.widget_ready))
+        views.setTextViewText(R.id.widget_budgeted_label, context.getString(R.string.widget_budgeted))
+        views.setTextViewText(R.id.widget_balance_label, context.getString(R.string.widget_balance))
         val repository = ActuaRepository(context)
         try {
             if (!repository.isUsingActualBudget) {
@@ -210,7 +217,7 @@ object WidgetUpdater {
                 views.setTextViewText(R.id.widget_balance_value, "—")
             } else {
                 val overview = repository.budgetOverview()
-                val month = YearMonth.now().format(DateTimeFormatter.ofPattern("MMMM yyyy"))
+                val month = YearMonth.now().format(DateTimeFormatter.ofPattern("MMMM yyyy", contextLocale(context)))
                 views.setTextViewText(R.id.widget_month, month)
                 views.setTextViewText(
                     R.id.widget_ready_value,
@@ -228,6 +235,8 @@ object WidgetUpdater {
 
     private fun updateCategories(context: Context, manager: AppWidgetManager, widgetId: Int) {
         val views = RemoteViews(context.packageName, R.layout.widget_favourite_categories)
+        views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_favourite_categories))
+        views.setTextViewText(R.id.widget_empty, context.getString(R.string.widget_no_categories))
         val repository = ActuaRepository(context)
         try {
             val all = repository.budgetGroups().asSequence()
@@ -242,7 +251,7 @@ object WidgetUpdater {
                 context, views, rows.map { row ->
                     val spent = row.spentCents.coerceAtLeast(0)
                     val denominator = row.assignedCents.coerceAtLeast(1)
-                    WidgetRow(row.name, money(context, row.balanceCents),
+                    WidgetRow(row.name.ifBlank { context.getString(R.string.common_unknown) }, money(context, row.balanceCents),
                         ((spent * 100 / denominator).coerceIn(0, 100)).toInt(), row.name)
                 }, widgetId, WidgetActions.CATEGORY, showProgress = true,
             )
@@ -260,6 +269,9 @@ object WidgetUpdater {
             R.layout.widget_quick_transaction
         }
         val views = RemoteViews(context.packageName, layout)
+        views.setTextViewText(R.id.widget_expense, context.getString(R.string.widget_expense))
+        views.setTextViewText(R.id.widget_income, context.getString(R.string.widget_income))
+        views.setTextViewText(R.id.widget_transfer, context.getString(R.string.widget_transfer))
         views.setOnClickPendingIntent(R.id.widget_expense, open(context, WidgetActions.ADD_EXPENSE, widgetId))
         views.setOnClickPendingIntent(R.id.widget_income, open(context, WidgetActions.ADD_INCOME, widgetId))
         views.setOnClickPendingIntent(R.id.widget_transfer, open(context, WidgetActions.ADD_TRANSFER, widgetId))
@@ -268,13 +280,22 @@ object WidgetUpdater {
 
     private fun updateAccounts(context: Context, manager: AppWidgetManager, widgetId: Int) {
         val views = RemoteViews(context.packageName, R.layout.widget_account_balances)
+        views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_account_balances))
+        views.setTextViewText(R.id.widget_empty, context.getString(R.string.widget_no_accounts))
         val repository = ActuaRepository(context)
         try {
             val all = repository.accounts().filterNot { it.closed }
             val selected = WidgetPreferences(context).selected(WidgetKind.Accounts, widgetId)
             val rows = if (selected.isEmpty()) all.take(4) else all.filter { it.id in selected }.take(4)
             bindRows(
-                context, views, rows.map { WidgetRow(it.name, money(context, it.balanceCents), 0, it.name) },
+                context, views, rows.map {
+                    WidgetRow(
+                        it.name.ifBlank { context.getString(R.string.common_unknown) },
+                        money(context, it.balanceCents),
+                        0,
+                        it.name,
+                    )
+                },
                 widgetId, WidgetActions.ACCOUNTS, showProgress = false,
             )
             views.setOnClickPendingIntent(R.id.widget_root, open(context, WidgetActions.ACCOUNTS, widgetId))
@@ -289,6 +310,8 @@ object WidgetUpdater {
         val layout = if (compact) R.layout.widget_scheduled_transactions_compact else R.layout.widget_scheduled_transactions
         val maxRows = if (compact) 2 else 4
         val views = RemoteViews(context.packageName, layout)
+        views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_upcoming_schedules))
+        views.setTextViewText(R.id.widget_empty, context.getString(R.string.widget_no_schedules))
         val repository = ActuaRepository(context)
         try {
             val entries = if (!repository.isUsingActualBudget) {
@@ -332,7 +355,7 @@ object WidgetUpdater {
             views.setViewVisibility(containers[index], if (entry == null) View.GONE else View.VISIBLE)
             if (entry != null) {
                 views.setTextViewText(titles[index], entry.item.title)
-                views.setTextViewText(dues[index], entry.relativeLabel)
+                views.setTextViewText(dues[index], relativeDueLabel(context, entry.dueDate))
                 views.setTextViewText(amounts[index], scheduleAmount(context, entry.item.schedule))
                 views.setOnClickPendingIntent(
                     containers[index], open(context, WidgetActions.SCHEDULES, widgetId * 10 + index + 1),
@@ -340,6 +363,16 @@ object WidgetUpdater {
             }
         }
         views.setViewVisibility(R.id.widget_empty, if (entries.isEmpty()) View.VISIBLE else View.GONE)
+    }
+
+    private fun relativeDueLabel(context: Context, dueDate: DayDate): String {
+        val days = DayDate.today().daysUntil(dueDate)
+        return when {
+            days == 0 -> context.getString(R.string.widget_due_today)
+            days == 1 -> context.getString(R.string.widget_due_tomorrow)
+            days > 1 -> context.resources.getQuantityString(R.plurals.widget_due_in_days, days, days)
+            else -> context.resources.getQuantityString(R.plurals.widget_days_overdue, -days, -days)
+        }
     }
 
     private fun scheduleAmount(context: Context, schedule: ActualScheduleSummary): String {
@@ -400,6 +433,9 @@ object WidgetUpdater {
         CurrencyDisplay.symbolOnly = preferences.currencySymbolOnly
         NumberDisplay.format = preferences.numberFormat
         return formatMoneyCents(cents, preferences.hideDecimalPlaces,
-            respectBalanceVisibility = false).let { if (preferences.hideBalances) "••••" else it }
+            respectBalanceVisibility = false, locale = contextLocale(context))
+            .let { if (preferences.hideBalances) "••••" else it }
     }
+
+    private fun contextLocale(context: Context): Locale = context.resources.configuration.locales[0]
 }

@@ -60,13 +60,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.budget.ActiveTagRepository
 import com.azimulkabir.actua.data.location.ForegroundLocationPermission
 import com.azimulkabir.actua.model.Transaction
@@ -135,9 +138,7 @@ fun AddTransactionScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var notes by remember(editing) { mutableStateOf(editing?.notes ?: "") }
     var cleared by remember(editing) { mutableStateOf(editing?.cleared ?: false) }
-    var transactionType by remember(editing, defaultType) {
-        mutableStateOf((editing?.type ?: defaultType).displayName)
-    }
+    var transactionType by remember(editing, defaultType) { mutableStateOf(editing?.type ?: defaultType) }
     var splitLines by remember(editing) { mutableStateOf(editing?.splits.orEmpty()) }
     var splitCalculatorIndex by remember { mutableStateOf<Int?>(null) }
     var splitAmountExpression by remember(editing) { mutableStateOf<String?>(null) }
@@ -146,6 +147,7 @@ fun AddTransactionScreen(
     // edit; a category filled in by an earlier rule preview is not.
     var categoryIsExplicit by remember(editing) { mutableStateOf(editing?.category?.isNotBlank() == true) }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val tagRepository = remember { ActiveTagRepository(context) }
     var tagVersion by remember { mutableStateOf(0L) }
     val availableTags = remember(tagVersion) { tagRepository.tags(tagVersion) }
@@ -163,7 +165,7 @@ fun AddTransactionScreen(
         (isOffBudget || it.category.isNotBlank()) && it.amountCents > 0
     } && splitTotal == amountCents)
     val canSave = amountCents > 0 && account.isNotBlank() &&
-        (transactionType != Type.TRANSFER.displayName || transferAccount.isNotBlank()) && splitIsValid
+        (transactionType != Type.TRANSFER || transferAccount.isNotBlank()) && splitIsValid
     val cursorTransition = rememberInfiniteTransition(label = "Amount cursor")
     val cursorAlpha by cursorTransition.animateFloat(
         initialValue = 1f,
@@ -180,14 +182,14 @@ fun AddTransactionScreen(
                     id = editing?.id.orEmpty(),
                     date = storageDate(date),
                     payee = payee,
-                    category = if (transactionType == "Transfer" || isOffBudget) ""
-                    else category.ifBlank { "Uncategorized" },
+                    category = if (transactionType == Type.TRANSFER || isOffBudget) ""
+                    else category,
                     account = account,
-                    amount = (amountCents / 100L).toInt() * if (transactionType == "Income") 1 else -1,
+                    amount = (amountCents / 100L).toInt() * if (transactionType == Type.INCOME) 1 else -1,
                     cleared = cleared,
-                    amountCents = amountCents * if (transactionType == "Income") 1 else -1,
-                    type = Type.entries.first { it.displayName == transactionType },
-                    transferAccount = transferAccount.takeIf { transactionType == "Transfer" },
+                    amountCents = amountCents * if (transactionType == Type.INCOME) 1 else -1,
+                    type = transactionType,
+                    transferAccount = transferAccount.takeIf { transactionType == Type.TRANSFER },
                     notes = notes,
                     splits = if (isOffBudget) splitLines.map { it.copy(category = "") } else splitLines,
                     rulesApplied = rulesApplied,
@@ -202,16 +204,16 @@ fun AddTransactionScreen(
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Outlined.Close, contentDescription = "Cancel")
+                Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.action_cancel))
             }
-            Text(if (editing == null) "Add transaction" else "Edit transaction",
+            Text(stringResource(if (editing == null) R.string.transaction_add else R.string.transaction_edit),
                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f))
             if (editing != null) {
                 IconButton(onClick = { confirmDelete = true }) {
                     Icon(
                         Icons.Outlined.Delete,
-                        contentDescription = "Delete transaction",
+                        contentDescription = stringResource(R.string.transaction_delete),
                         tint = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -225,15 +227,15 @@ fun AddTransactionScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Type.entries.forEach { type ->
                     FilterChip(
-                        selected = transactionType == type.displayName,
+                        selected = transactionType == type,
                         onClick = {
-                            if (transactionType != type.displayName) rulesApplied = false
-                            transactionType = type.displayName
+                            if (transactionType != type) rulesApplied = false
+                            transactionType = type
                             if (type == Type.TRANSFER) splitLines = emptyList()
                         },
                         label = {
                             Text(
-                                type.displayName,
+                                stringResource(type.labelRes()),
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = TextAlign.Center,
                             )
@@ -253,6 +255,7 @@ fun AddTransactionScreen(
                     input = amountInput,
                     active = showCalculator,
                     cursor = blinkingCursor,
+                    placeholder = stringResource(R.string.transaction_amount_label),
                 )
                 OutlinedTextField(
                     value = amountPresentation.value,
@@ -260,7 +263,9 @@ fun AddTransactionScreen(
                     placeholder = { if (amountPresentation.placeholder.isNotEmpty()) Text(amountPresentation.placeholder) },
                     singleLine = true,
                     trailingIcon = { Icon(Icons.Outlined.Calculate, contentDescription = null) },
-                    supportingText = { if (hideDecimalPlaces) Text("Decimal places are hidden in lists") },
+                    supportingText = {
+                        if (hideDecimalPlaces) Text(stringResource(R.string.transaction_decimal_hidden))
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 EmptyAmountCaret(
@@ -277,18 +282,21 @@ fun AddTransactionScreen(
                     },
                 )
             }
-            if (transactionType != Type.TRANSFER.displayName) {
+            if (transactionType != Type.TRANSFER) {
                 PickerTextField(
-                    label = "Payee", value = payee, options = payeeOptions,
-                    supportingValues = accountBalanceLabels.mapKeys { "Transfer: ${it.key}" },
+                    label = stringResource(R.string.transaction_payee), value = payee, options = payeeOptions,
+                    supportingValues = accountBalanceLabels.mapKeys {
+                        resources.getString(R.string.transaction_transfer_prefix, it.key)
+                    },
                     onValueChange = { value ->
-                        val transferTarget = value.takeIf { it.startsWith("Transfer: ") }
-                            ?.removePrefix("Transfer: ")?.takeIf(accountOptions::contains)
+                        val transferTarget = accountOptions.firstOrNull {
+                            value == resources.getString(R.string.transaction_transfer_prefix, it)
+                        }
                         if (transferTarget != null) {
                             if (transferTarget != account) {
                                 payee = ""
                                 transferAccount = transferTarget
-                                transactionType = Type.TRANSFER.displayName
+                                transactionType = Type.TRANSFER
                                 category = ""
                                 splitLines = emptyList()
                             }
@@ -303,7 +311,7 @@ fun AddTransactionScreen(
                                 category = category,
                                 amount = (amountCents / 100).toInt(),
                                 amountCents = amountCents,
-                                type = Type.entries.first { it.displayName == transactionType },
+                                type = transactionType,
                                 date = storageDate(date),
                                 notes = notes,
                                 cleared = cleared,
@@ -317,7 +325,7 @@ fun AddTransactionScreen(
                             notes = preview.notes
                             parseStoredDate(preview.date)?.let { date = it }
                             amountCents = abs(preview.amountCents)
-                            transactionType = preview.type.displayName
+                            transactionType = preview.type
                             rulesApplied = preview.rulesApplied
                         }
                     },
@@ -327,14 +335,16 @@ fun AddTransactionScreen(
                     onForgetPayeeLocation = onForgetPayeeLocation,
                 )
             }
-            if (transactionType != Type.TRANSFER.displayName && !isSplit && !isOffBudget) {
+            if (transactionType != Type.TRANSFER && !isSplit && !isOffBudget) {
                 PickerTextField(
-                    label = "Category", value = category, options = categoryOptions,
+                    label = stringResource(R.string.transaction_category), value = category, options = categoryOptions,
                     onValueChange = { category = it; categoryIsExplicit = it.isNotBlank() },
                 )
             }
             PickerTextField(
-                label = if (transactionType == Type.TRANSFER.displayName) "From" else "Account",
+                label = stringResource(
+                    if (transactionType == Type.TRANSFER) R.string.transaction_from else R.string.transaction_account,
+                ),
                 value = account, options = accountOptions,
                 supportingValues = accountBalanceLabels,
                 onValueChange = {
@@ -346,9 +356,9 @@ fun AddTransactionScreen(
                     if (transferAccount == it) { transferAccount = ""; rulesApplied = false }
                 },
             )
-            if (transactionType == Type.TRANSFER.displayName) {
+            if (transactionType == Type.TRANSFER) {
                 PickerTextField(
-                    label = "To", value = transferAccount,
+                    label = stringResource(R.string.transaction_to), value = transferAccount,
                     options = accountOptions.filterNot { it == account },
                     supportingValues = accountBalanceLabels,
                     onValueChange = { value ->
@@ -387,7 +397,11 @@ fun AddTransactionScreen(
                         },
                         modifier = Modifier.fillMaxWidth().height(54.dp),
                         shape = MaterialTheme.shapes.large,
-                    ) { Text(if (isOffBudget) "Split transaction" else "Split into multiple categories") }
+                    ) {
+                        Text(stringResource(
+                            if (isOffBudget) R.string.transaction_split else R.string.transaction_split_multiple_categories,
+                        ))
+                    }
                 } else {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -398,7 +412,9 @@ fun AddTransactionScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                if (isOffBudget) "Split transaction" else "Split categories",
+                                stringResource(
+                                    if (isOffBudget) R.string.transaction_split else R.string.transaction_split_categories,
+                                ),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f),
@@ -406,13 +422,14 @@ fun AddTransactionScreen(
                             TextButton(onClick = {
                                 category = if (isOffBudget) "" else splitLines.firstOrNull()?.category.orEmpty()
                                 splitLines = emptyList()
-                            }) { Text("Remove split") }
+                            }) { Text(stringResource(R.string.transaction_remove_split)) }
                         }
                         splitLines.forEachIndexed { index, line ->
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Split ${index + 1}", style = MaterialTheme.typography.labelLarge)
+                                Text(stringResource(R.string.transaction_split_number, index + 1),
+                                    style = MaterialTheme.typography.labelLarge)
                                 if (!isOffBudget) PickerTextField(
-                                    label = "Category",
+                                    label = stringResource(R.string.transaction_category),
                                     value = line.category,
                                     options = categoryOptions,
                                     onValueChange = { value ->
@@ -433,6 +450,7 @@ fun AddTransactionScreen(
                                         input = splitAmountInput,
                                         active = splitCalculatorIndex == index,
                                         cursor = blinkingCursor,
+                                        placeholder = stringResource(R.string.transaction_amount_label),
                                     )
                                     OutlinedTextField(
                                         value = splitAmountPresentation.value,
@@ -462,7 +480,10 @@ fun AddTransactionScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
-                                        if (line.isOpposite) "Opposite direction" else "Same direction",
+                                        stringResource(
+                                            if (line.isOpposite) R.string.transaction_opposite_direction
+                                            else R.string.transaction_same_direction,
+                                        ),
                                         modifier = Modifier.weight(1f),
                                     )
                                     Switch(
@@ -479,13 +500,20 @@ fun AddTransactionScreen(
                                         splitLines = splitLines.toMutableList().also {
                                             it[index] = line.copy(amountCents = amountCents - splitTotal)
                                         }
-                                    }) { Text("Use remaining $currencyPrefix${centsToInput(amountCents - splitTotal)}") }
+                                    }) {
+                                        Text(stringResource(
+                                            R.string.transaction_use_remaining,
+                                            "$currencyPrefix${centsToInput(amountCents - splitTotal)}",
+                                        ))
+                                    }
                                 }
                                 PickerTextField(
-                                    label = "Payee (optional)",
+                                    label = stringResource(R.string.transaction_payee_optional),
                                     value = line.payee,
                                     options = payeeOptions,
-                                    supportingValues = accountBalanceLabels.mapKeys { "Transfer: ${it.key}" },
+                                    supportingValues = accountBalanceLabels.mapKeys {
+                                        resources.getString(R.string.transaction_transfer_prefix, it.key)
+                                    },
                                     onValueChange = { value ->
                                         splitLines = splitLines.toMutableList().also {
                                             it[index] = line.copy(payee = value)
@@ -502,13 +530,16 @@ fun AddTransactionScreen(
                                         }
                                     },
                                     onCreateTag = { name -> tagRepository.create(name)?.also { tagVersion += 1 } },
-                                    label = "Split note",
+                                    label = stringResource(R.string.transaction_split_note),
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                                 if (splitLines.size > 2) {
                                     TextButton(onClick = {
                                         splitLines = splitLines.toMutableList().also { it.removeAt(index) }
-                                    }) { Text("Remove this split", color = MaterialTheme.colorScheme.error) }
+                                    }) {
+                                        Text(stringResource(R.string.transaction_remove_this_split),
+                                            color = MaterialTheme.colorScheme.error)
+                                    }
                                 }
                                 if (index < splitLines.lastIndex) HorizontalDivider()
                             }
@@ -517,10 +548,13 @@ fun AddTransactionScreen(
                             onClick = { splitLines = splitLines + SplitLine() },
                             modifier = Modifier.fillMaxWidth().height(54.dp),
                             shape = MaterialTheme.shapes.large,
-                        ) { Text("Add another split") }
+                        ) { Text(stringResource(R.string.transaction_add_another_split)) }
                         Text(
-                            if (splitTotal == amountCents) "Split total matches the transaction amount"
-                            else "Remaining: $currencyPrefix${centsToInput(amountCents - splitTotal)}",
+                            if (splitTotal == amountCents) stringResource(R.string.transaction_split_total_matches)
+                            else stringResource(
+                                R.string.transaction_remaining,
+                                "$currencyPrefix${centsToInput(amountCents - splitTotal)}",
+                            ),
                             color = if (splitTotal == amountCents) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
@@ -531,7 +565,7 @@ fun AddTransactionScreen(
             Box(Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = formatDate(date), onValueChange = {}, readOnly = true,
-                    label = { Text("Date") }, singleLine = true,
+                    label = { Text(stringResource(R.string.transaction_date)) }, singleLine = true,
                     trailingIcon = { Icon(Icons.Outlined.DateRange, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -542,11 +576,11 @@ fun AddTransactionScreen(
                 tags = availableTags,
                 onValueChange = { notes = it },
                 onCreateTag = { name -> tagRepository.create(name)?.also { tagVersion += 1 } },
-                label = "Notes",
+                label = stringResource(R.string.transaction_notes),
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Cleared", modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.transaction_cleared), modifier = Modifier.weight(1f))
                 Switch(checked = cleared, onCheckedChange = { cleared = it })
             }
             TransactionSaveButton(
@@ -558,7 +592,7 @@ fun AddTransactionScreen(
         }
     }
     if (showCalculator) CalculatorAmountSheet(
-        title = if (editing == null) "Transaction amount" else "Edit amount",
+        title = stringResource(if (editing == null) R.string.transaction_amount else R.string.transaction_edit_amount),
         initialCents = amountCents,
         conventionalAmountEntry = conventionalAmountEntry,
         onDismiss = {
@@ -571,7 +605,7 @@ fun AddTransactionScreen(
     splitCalculatorIndex?.let { index ->
         val line = splitLines.getOrNull(index)
         if (line != null) CalculatorAmountSheet(
-            title = "Split ${index + 1} amount",
+            title = stringResource(R.string.transaction_split_amount, index + 1),
             initialCents = line.amountCents,
             conventionalAmountEntry = conventionalAmountEntry,
             onDismiss = {
@@ -587,16 +621,16 @@ fun AddTransactionScreen(
     if (confirmDelete && editing != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete transaction?") },
-            text = { Text("This transaction will be removed from your budget.") },
+            title = { Text(stringResource(R.string.transaction_delete_question)) },
+            text = { Text(stringResource(R.string.transaction_delete_budget_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete(editing)
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }
@@ -612,14 +646,20 @@ fun AddTransactionScreen(
                         date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
                     }
                     showDatePicker = false
-                }) { Text("OK") }
+                }) { Text(stringResource(R.string.action_ok)) }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) {
+                Text(stringResource(R.string.action_cancel))
+            } },
         ) { DatePicker(state = pickerState) }
     }
 }
 
-private val Type.displayName: String get() = name.lowercase().replaceFirstChar(Char::uppercase)
+private fun Type.labelRes(): Int = when (this) {
+    Type.EXPENSE -> R.string.transaction_type_expense
+    Type.INCOME -> R.string.transaction_type_income
+    Type.TRANSFER -> R.string.transaction_type_transfer
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -635,7 +675,7 @@ private fun TransactionSaveButton(
         shape = MaterialTheme.shapes.large,
     ) {
         Icon(Icons.Outlined.Check, contentDescription = null)
-        Text("Save", modifier = Modifier.padding(start = 8.dp))
+        Text(stringResource(R.string.action_save), modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -653,15 +693,17 @@ internal fun PickerTextField(
 ) {
     var showPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val coroutineScope = rememberCoroutineScope()
     var knownNearbyPayees by remember { mutableStateOf<Set<String>?>(null) }
     var locationActionLoading by remember { mutableStateOf(false) }
     var locationActionMessage by remember { mutableStateOf<String?>(null) }
     var pendingPermissionAction by remember { mutableStateOf<PayeeLocationInlineAction?>(null) }
     var showPermissionExplanation by remember { mutableStateOf(false) }
+    val transferPrefix = resources.getString(R.string.transaction_transfer_prefix, "")
     val inlineAction = payeeLocationInlineAction(
         payee = value,
-        ordinaryPayees = options.filterNot { it.startsWith("Transfer: ") }.toSet(),
+        ordinaryPayees = options.filterNot { it.startsWith(transferPrefix) }.toSet(),
         knownNearbyPayees = knownNearbyPayees,
         canFindNearby = onFindNearby != null,
         canSaveLocation = onSavePayeeLocation != null,
@@ -674,23 +716,27 @@ internal fun PickerTextField(
                 PayeeLocationInlineAction.Nearby -> {
                     val result = runCatching { onFindNearby?.invoke() }.getOrNull()
                     if (result == null) {
-                        locationActionMessage = "Could not determine nearby payees. Try again or choose one normally."
+                        locationActionMessage = resources.getString(R.string.location_nearby_failed)
                     } else {
                         knownNearbyPayees = result.options.mapTo(mutableSetOf()) { it.payee }
                         val closest = result.options.firstOrNull()
                         if (closest != null) {
                             onValueChange(closest.payee)
-                            locationActionMessage = "Selected ${closest.payee}, ${closest.distance}."
+                            locationActionMessage = resources.getString(
+                                R.string.location_selected_payee,
+                                closest.payee,
+                                closest.distance,
+                            )
                         } else {
                             locationActionMessage = result.message
-                                ?: "No saved payee locations were found within 500 metres."
+                                ?: resources.getString(R.string.location_none_within_range)
                         }
                     }
                 }
                 PayeeLocationInlineAction.SaveLocation -> {
                     val result = runCatching { onSavePayeeLocation?.invoke(value) }.getOrNull()
                     if (result == null) {
-                        locationActionMessage = "Could not save this payee location. Try again."
+                        locationActionMessage = resources.getString(R.string.location_save_failed)
                     } else {
                         locationActionMessage = result.message
                         if (result.nowNearby) {
@@ -710,7 +756,7 @@ internal fun PickerTextField(
         if (grants.values.any { it } || ForegroundLocationPermission.isGranted(context)) {
             action?.let(runLocationAction)
         } else {
-            locationActionMessage = "Location permission was not granted. You can still choose a payee normally."
+            locationActionMessage = resources.getString(R.string.location_permission_not_granted_choose)
         }
     }
     Box(Modifier.fillMaxWidth()) {
@@ -738,7 +784,10 @@ internal fun PickerTextField(
                         } else {
                             Icon(Icons.Outlined.LocationOn, contentDescription = null)
                             Text(
-                                if (action == PayeeLocationInlineAction.Nearby) "Nearby" else "Save location",
+                                stringResource(
+                                    if (action == PayeeLocationInlineAction.Nearby) R.string.location_nearby
+                                    else R.string.location_save,
+                                ),
                                 modifier = Modifier.padding(start = 4.dp),
                             )
                         }
@@ -755,7 +804,9 @@ internal fun PickerTextField(
         )
     }
     if (showPicker) SearchableTransactionPicker(
-        title = label.removeSuffix(" (optional)"),
+        title = if (label == resources.getString(R.string.transaction_payee_optional)) {
+            resources.getString(R.string.transaction_payee)
+        } else label,
         selected = value,
         options = options,
         allowCustom = allowCustom,
@@ -777,23 +828,23 @@ internal fun PickerTextField(
                 showPermissionExplanation = false
                 pendingPermissionAction = null
             },
-            title = { Text("Use your location?") },
+            title = { Text(stringResource(R.string.location_use_question)) },
             text = {
                 Text(
-                    "Actua uses a one-time foreground location to find nearby saved payees or save this payee's location inside your Actual budget. It does not track location in the background or send it to another service.",
+                    stringResource(R.string.location_explanation_save),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     showPermissionExplanation = false
                     locationPermissionLauncher.launch(ForegroundLocationPermission.permissions)
-                }) { Text("Continue") }
+                }) { Text(stringResource(R.string.action_continue)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showPermissionExplanation = false
                     pendingPermissionAction = null
-                }) { Text("Not now") }
+                }) { Text(stringResource(R.string.action_not_now)) }
             },
         )
     }
@@ -816,6 +867,7 @@ private fun SearchableTransactionPicker(
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
+    val resources = LocalResources.current
     val coroutineScope = rememberCoroutineScope()
     var nearbyLoading by remember { mutableStateOf(false) }
     var nearbyOptions by remember { mutableStateOf(emptyList<NearbyPayeeOption>()) }
@@ -829,7 +881,7 @@ private fun SearchableTransactionPicker(
                 nearbyMessage = null
                 val result = runCatching { findNearby() }.getOrElse {
                     NearbyPayeeSearchResult(
-                        message = "Could not determine nearby payees. You can still search normally.",
+                        message = resources.getString(R.string.location_find_failed),
                     )
                 }
                 nearbyOptions = result.options
@@ -847,7 +899,7 @@ private fun SearchableTransactionPicker(
             loadNearby()
         } else {
             nearbyOptions = emptyList()
-            nearbyMessage = "Location permission was not granted. You can still search normally."
+            nearbyMessage = resources.getString(R.string.location_permission_not_granted_search)
         }
     }
     LaunchedEffect(Unit) {
@@ -856,15 +908,18 @@ private fun SearchableTransactionPicker(
         }
     }
     val uniqueOptions = remember(options) { options.distinct() }
-    val searchResults = remember(query, uniqueOptions) { filterPickerOptions(uniqueOptions, query) }
+    val transferPrefix = resources.getString(R.string.transaction_transfer_prefix, "")
+    val searchResults = remember(query, uniqueOptions, transferPrefix) {
+        filterPickerOptions(uniqueOptions, query, transferPrefix)
+    }
     // Only `grouped` (query.isBlank()) or `transferOptions` (also query.isBlank()) are ever
     // shown at once, but both were being sorted/grouped on every keystroke regardless of which
     // (if either) is actually visible; remember them keyed on the option list instead.
-    val transferOptions = remember(uniqueOptions) {
-        alphabetizePickerOptions(uniqueOptions.filter { it.startsWith("Transfer: ") })
+    val transferOptions = remember(uniqueOptions, transferPrefix) {
+        alphabetizePickerOptions(uniqueOptions.filter { it.startsWith(transferPrefix) }, transferPrefix)
     }
-    val grouped = remember(uniqueOptions) {
-        uniqueOptions.filterNot { it.startsWith("Transfer: ") }
+    val grouped = remember(uniqueOptions, transferPrefix) {
+        uniqueOptions.filterNot { it.startsWith(transferPrefix) }
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
             .groupBy { it.firstOrNull()?.uppercaseChar()?.takeIf(Char::isLetterOrDigit)?.toString() ?: "#" }
     }
@@ -880,7 +935,10 @@ private fun SearchableTransactionPicker(
                     value = query,
                     onValueChange = { query = it },
                     placeholder = {
-                        Text(if (allowCustom) "Find or add a ${title.lowercase()}" else "Search ${title.lowercase()}")
+                        Text(stringResource(
+                            if (allowCustom) R.string.picker_find_or_add else R.string.picker_search,
+                            title.lowercase(),
+                        ))
                     },
                     leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                     singleLine = true,
@@ -900,7 +958,7 @@ private fun SearchableTransactionPicker(
                     ),
                 ) {
                     if (selected.isNotBlank() && query.isBlank() && selected in uniqueOptions) {
-                        item { PickerSectionLabel("Selected") }
+                        item { PickerSectionLabel(stringResource(R.string.picker_selected)) }
                         item {
                             PickerGroup(
                                 listOf(selected), selected, supportingValues = supportingValues,
@@ -909,7 +967,7 @@ private fun SearchableTransactionPicker(
                         }
                     }
                     if (query.isBlank() && onFindNearby != null) {
-                        item { PickerSectionLabel("Nearby") }
+                        item { PickerSectionLabel(stringResource(R.string.picker_nearby)) }
                         item {
                             FilledTonalButton(
                                 onClick = {
@@ -932,7 +990,10 @@ private fun SearchableTransactionPicker(
                                 } else {
                                     Icon(Icons.Outlined.LocationOn, contentDescription = null)
                                     Text(
-                                        if (nearbyOptions.isEmpty()) "Find nearby payees" else "Refresh nearby payees",
+                                        stringResource(
+                                            if (nearbyOptions.isEmpty()) R.string.location_find_payees
+                                            else R.string.location_refresh_payees,
+                                        ),
                                         modifier = Modifier.padding(start = 8.dp),
                                     )
                                 }
@@ -956,10 +1017,13 @@ private fun SearchableTransactionPicker(
                                                     nearbyOptions = nearbyOptions.filterNot {
                                                         it.locationId == option.locationId
                                                     }
-                                                    nearbyMessage = "Saved location for ${option.payee} forgotten."
+                                                    nearbyMessage = resources.getString(
+                                                        R.string.location_forgotten,
+                                                        option.payee,
+                                                    )
                                                     onNearbyResult(NearbyPayeeSearchResult(nearbyOptions, nearbyMessage))
                                                 } else {
-                                                    nearbyMessage = "Could not forget the saved location. Try again."
+                                                    nearbyMessage = resources.getString(R.string.location_forget_failed)
                                                 }
                                                 forgettingLocationId = null
                                             }
@@ -980,24 +1044,24 @@ private fun SearchableTransactionPicker(
                         }
                     }
                     if (query.isNotBlank() && searchResults.isNotEmpty()) {
-                        item { PickerSectionLabel("Search results") }
+                        item { PickerSectionLabel(stringResource(R.string.picker_search_results)) }
                         item {
                             PickerGroup(
                                 options = searchResults,
                                 selected = selected,
-                                displayText = { it.removePrefix("Transfer: ") },
+                                displayText = { it.removePrefix(transferPrefix) },
                                 supportingValues = supportingValues,
                                 onSelect = onSelect,
                             )
                         }
                     }
                     if (query.isBlank() && transferOptions.isNotEmpty()) {
-                        item { PickerSectionLabel("Payments and transfers") }
+                        item { PickerSectionLabel(stringResource(R.string.picker_payments_transfers)) }
                         item {
                             PickerGroup(
                                 options = transferOptions,
                                 selected = selected,
-                                displayText = { it.removePrefix("Transfer: ") },
+                                displayText = { it.removePrefix(transferPrefix) },
                                 supportingValues = supportingValues,
                                 onSelect = onSelect,
                             )
@@ -1007,12 +1071,12 @@ private fun SearchableTransactionPicker(
                             it.equals(query.trim(), ignoreCase = true)
                         }
                     ) {
-                        item { PickerSectionLabel("New ${title.lowercase()}") }
+                        item { PickerSectionLabel(stringResource(R.string.picker_new, title.lowercase())) }
                         item {
                             PickerGroup(
                                 options = listOf(query.trim()),
                                 selected = "",
-                                displayText = { "Add “$it”" },
+                                displayText = { resources.getString(R.string.picker_add_value, it) },
                                 onSelect = onSelect,
                             )
                         }
@@ -1031,7 +1095,7 @@ private fun SearchableTransactionPicker(
                     if (query.isNotBlank() && searchResults.isEmpty() && !allowCustom) {
                         item {
                             Text(
-                                "No matches",
+                                stringResource(R.string.picker_no_matches),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 24.dp),
                             )
@@ -1044,20 +1108,22 @@ private fun SearchableTransactionPicker(
     if (showPermissionExplanation) {
         AlertDialog(
             onDismissRequest = { showPermissionExplanation = false },
-            title = { Text("Use your location?") },
+            title = { Text(stringResource(R.string.location_use_question)) },
             text = {
                 Text(
-                    "Actua uses a one-time foreground location to find nearby payees saved inside your Actual budget. It does not track location in the background or send it to another service.",
+                    stringResource(R.string.location_explanation_find),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     showPermissionExplanation = false
                     locationPermissionLauncher.launch(ForegroundLocationPermission.permissions)
-                }) { Text("Continue") }
+                }) { Text(stringResource(R.string.action_continue)) }
             },
             dismissButton = {
-                TextButton(onClick = { showPermissionExplanation = false }) { Text("Not now") }
+                TextButton(onClick = { showPermissionExplanation = false }) {
+                    Text(stringResource(R.string.action_not_now))
+                }
             },
         )
     }
@@ -1105,16 +1171,17 @@ internal fun amountFieldPresentation(
     input: String,
     active: Boolean,
     cursor: String,
+    placeholder: String = "",
 ): AmountFieldPresentation = if (input.isEmpty()) {
     AmountFieldPresentation(
         value = "",
-        placeholder = if (active) "" else "Amount",
+        placeholder = if (active) "" else placeholder,
         showEmptyCaret = active,
     )
 } else {
     AmountFieldPresentation(
         value = currencyPrefix + input + if (active) cursor else "",
-        placeholder = "Amount",
+        placeholder = placeholder,
         showEmptyCaret = false,
     )
 }
@@ -1134,16 +1201,24 @@ private fun EmptyAmountCaret(
     }
 }
 
-internal fun filterPickerOptions(options: List<String>, query: String): List<String> {
+internal fun filterPickerOptions(
+    options: List<String>,
+    query: String,
+    transferPrefix: String = "",
+): List<String> {
     val term = query.trim()
-    if (term.isEmpty()) return alphabetizePickerOptions(options)
+    if (term.isEmpty()) return alphabetizePickerOptions(options, transferPrefix)
     return alphabetizePickerOptions(
-        options.filter { it.removePrefix("Transfer: ").contains(term, ignoreCase = true) },
+        options.filter { it.removePrefix(transferPrefix).contains(term, ignoreCase = true) },
+        transferPrefix,
     )
 }
 
-internal fun alphabetizePickerOptions(options: List<String>): List<String> = options.distinct()
-    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.removePrefix("Transfer: ") })
+internal fun alphabetizePickerOptions(
+    options: List<String>,
+    transferPrefix: String = "",
+): List<String> = options.distinct()
+    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.removePrefix(transferPrefix) })
 
 @Composable
 private fun PickerSectionLabel(text: String) {
@@ -1221,7 +1296,7 @@ private fun NearbyPickerGroup(
                             if (forgettingLocationId == option.locationId) {
                                 CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
                             } else {
-                                Text("Forget", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.action_forget), color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }

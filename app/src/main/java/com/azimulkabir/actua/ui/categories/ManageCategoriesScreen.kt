@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,6 +56,7 @@ import com.azimulkabir.actua.ui.components.NewCategoryDialog
 import com.azimulkabir.actua.ui.components.RenameDialog
 import com.azimulkabir.actua.ui.components.dragReorderHandle
 import kotlinx.coroutines.launch
+import com.azimulkabir.actua.R
 
 private const val ROW_HEIGHT_DP = 56
 private const val EDGE_SCROLL_ZONE_PX = 100f
@@ -155,9 +157,9 @@ fun ManageCategoriesScreen(
     }
 
     Column(modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Manage Categories", onBack = onBack) {
-            IconButton(onClick = onReorderGroupsClick) { Icon(Icons.Outlined.SwapVert, contentDescription = "Reorder Groups") }
-            IconButton(onClick = { addingGroup = true }) { Icon(Icons.Outlined.Add, contentDescription = "Add group") }
+        ActuaScreenHeader(title = stringResource(R.string.budget_manage_categories), onBack = onBack) {
+            IconButton(onClick = onReorderGroupsClick) { Icon(Icons.Outlined.SwapVert, contentDescription = stringResource(R.string.categories_reorder_groups)) }
+            IconButton(onClick = { addingGroup = true }) { Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.categories_add_group)) }
         }
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(rows.size, key = { index ->
@@ -205,7 +207,7 @@ fun ManageCategoriesScreen(
 
     renamingGroup?.let { group ->
         RenameDialog(
-            title = "Rename group",
+            title = stringResource(R.string.budget_rename_group),
             currentName = group.name,
             onDismiss = { renamingGroup = null },
             onSave = { name -> onRenameGroup(group.name, name); renamingGroup = null },
@@ -213,7 +215,7 @@ fun ManageCategoriesScreen(
     }
     renamingCategory?.let { (group, category) ->
         RenameDialog(
-            title = "Rename category",
+            title = stringResource(R.string.budget_rename_category),
             currentName = category.name,
             onDismiss = { renamingCategory = null },
             onSave = { name -> onRenameCategory(group.name, category.name, name); renamingCategory = null },
@@ -228,7 +230,7 @@ fun ManageCategoriesScreen(
     }
     if (addingGroup) {
         RenameDialog(
-            title = "New group",
+            title = stringResource(R.string.categories_new_group),
             currentName = "",
             onDismiss = { addingGroup = false },
             onSave = { name -> onCreateGroup(name); addingGroup = false },
@@ -248,13 +250,14 @@ fun ManageCategoriesScreen(
         )
     }
     deletingCategory?.let { (group, category) ->
+        val categoryName = category.name.ifBlank { stringResource(R.string.common_unknown) }
         AlertDialog(
             onDismissRequest = { deletingCategory = null },
-            title = { Text("Delete category?") },
-            text = { Text("Delete \"${category.name}\"? This cannot be undone.") },
-            dismissButton = { TextButton(onClick = { deletingCategory = null }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.categories_delete_question)) },
+            text = { Text(stringResource(R.string.categories_delete_warning, categoryName)) },
+            dismissButton = { TextButton(onClick = { deletingCategory = null }) { Text(stringResource(R.string.common_cancel)) } },
             confirmButton = {
-                TextButton(onClick = { onDeleteCategory(group.name, category.name); deletingCategory = null }) { Text("Delete") }
+                TextButton(onClick = { onDeleteCategory(group.name, category.name); deletingCategory = null }) { Text(stringResource(R.string.common_delete)) }
             },
         )
     }
@@ -268,27 +271,28 @@ private fun GroupManageRow(
     onToggleHidden: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val displayName = group.name.ifBlank { stringResource(R.string.common_unknown) }
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(
             Modifier.fillMaxWidth().height(ROW_HEIGHT_DP.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                group.name,
+                displayName,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(start = 8.dp),
             )
-            if (group.hidden) Icon(Icons.Outlined.VisibilityOff, "Hidden group", modifier = Modifier.size(18.dp).padding(end = 8.dp))
+            if (group.hidden) Icon(Icons.Outlined.VisibilityOff, stringResource(R.string.categories_hidden_group), modifier = Modifier.size(18.dp).padding(end = 8.dp))
             Box {
-                IconButton(onClick = { menuExpanded = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = "${group.name} group options") }
+                IconButton(onClick = { menuExpanded = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.categories_group_options, displayName)) }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(text = { Text("Rename") }, onClick = { menuExpanded = false; onRename() })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.common_rename)) }, onClick = { menuExpanded = false; onRename() })
                     if (!group.isIncome) {
-                        DropdownMenuItem(text = { Text("Add category") }, onClick = { menuExpanded = false; onAddCategory() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.categories_add_category)) }, onClick = { menuExpanded = false; onAddCategory() })
                         DropdownMenuItem(
-                            text = { Text(if (group.hidden) "Unhide group" else "Hide group") },
+                            text = { Text(stringResource(if (group.hidden) R.string.budget_unhide_group else R.string.budget_hide_group)) },
                             onClick = { menuExpanded = false; onToggleHidden() },
                         )
                     }
@@ -315,10 +319,11 @@ private fun CategoryManageRow(
     onDelete: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val displayName = category.name.ifBlank { stringResource(R.string.common_unknown) }
     Row(modifier.padding(start = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(
             Icons.Outlined.DragHandle,
-            contentDescription = "Drag to reorder ${category.name}",
+            contentDescription = stringResource(R.string.categories_drag_category, displayName),
             modifier = Modifier
                 .size(44.dp)
                 .padding(8.dp)
@@ -330,36 +335,36 @@ private fun CategoryManageRow(
                 ),
         )
         Text(
-            category.name,
+            displayName,
             style = MaterialTheme.typography.bodyLarge,
             overflow = TextOverflow.Ellipsis,
             color = if (category.hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
         )
-        if (category.hidden) Icon(Icons.Outlined.VisibilityOff, "Hidden category", modifier = Modifier.size(16.dp).padding(end = 8.dp))
+        if (category.hidden) Icon(Icons.Outlined.VisibilityOff, stringResource(R.string.categories_hidden_category), modifier = Modifier.size(16.dp).padding(end = 8.dp))
         Box {
-            IconButton(onClick = { menuExpanded = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = "${category.name} category options") }
+            IconButton(onClick = { menuExpanded = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.categories_category_options, displayName)) }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                DropdownMenuItem(text = { Text("Rename") }, onClick = { menuExpanded = false; onRename() })
-                DropdownMenuItem(text = { Text("Move to group") }, onClick = { menuExpanded = false; onMoveToGroup() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.common_rename)) }, onClick = { menuExpanded = false; onRename() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.categories_move_group)) }, onClick = { menuExpanded = false; onMoveToGroup() })
                 DropdownMenuItem(
-                    text = { Text("Move up") },
+                    text = { Text(stringResource(R.string.categories_move_up)) },
                     enabled = !isFirstInGroup,
                     onClick = { menuExpanded = false; onMoveUp() },
                 )
                 DropdownMenuItem(
-                    text = { Text("Move down") },
+                    text = { Text(stringResource(R.string.categories_move_down)) },
                     enabled = !isLastInGroup,
                     onClick = { menuExpanded = false; onMoveDown() },
                 )
                 DropdownMenuItem(
-                    text = { Text(if (category.hidden) "Unhide" else "Hide") },
+                    text = { Text(stringResource(if (category.hidden) R.string.categories_unhide else R.string.categories_hide)) },
                     leadingIcon = { Icon(if (category.hidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, null) },
                     onClick = { menuExpanded = false; onToggleHidden() },
                 )
                 HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text("Delete") },
+                    text = { Text(stringResource(R.string.common_delete)) },
                     leadingIcon = { Icon(Icons.Outlined.Delete, null) },
                     onClick = { menuExpanded = false; onDelete() },
                 )

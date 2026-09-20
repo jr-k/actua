@@ -1,5 +1,6 @@
 package com.azimulkabir.actua.ui.automation
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -59,6 +64,7 @@ import com.azimulkabir.actua.model.BudgetGroup
 import com.azimulkabir.actua.model.BudgetScheduleFunding
 import com.azimulkabir.actua.model.BudgetTarget
 import com.azimulkabir.actua.ui.components.formatMoneyCents
+import com.azimulkabir.actua.R
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -137,9 +143,9 @@ fun BudgetAutomationScreen(
             Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.common_back)) }
             Column(Modifier.weight(1f)) {
-                Text("Budget Automation", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.automation_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
                     "${group.name} · ${category.name}",
                     style = MaterialTheme.typography.bodySmall,
@@ -152,27 +158,27 @@ fun BudgetAutomationScreen(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            SectionHeader("Automations")
+            SectionHeader(stringResource(R.string.automation_section))
             if (contributionEntries.isEmpty()) EmptyAutomationsNote()
             contributionEntries.forEach { (index, target) ->
                 AutomationSummaryCard(target = target, hideDecimalPlaces = hideDecimalPlaces, onClick = { editingIndex = index })
             }
-            AddButton(enabled = entries.size < 20, onClick = { addingType = BudgetTarget.Type.FIXED }) { Text("+ Add an automation") }
+            AddButton(enabled = entries.size < 20, onClick = { addingType = BudgetTarget.Type.FIXED }) { Text(stringResource(R.string.automation_add)) }
 
-            SectionHeader("Options", modifier = Modifier.padding(top = 12.dp))
+            SectionHeader(stringResource(R.string.automation_options), modifier = Modifier.padding(top = 12.dp))
             optionEntries.forEach { (index, target) ->
                 AutomationSummaryCard(target = target, hideDecimalPlaces = hideDecimalPlaces, onClick = { editingIndex = index })
             }
-            if (!hasLimit) AddButton(onClick = { addingType = BudgetTarget.Type.LIMIT }) { Text("+ Add balance cap") }
-            if (!hasGoal) AddButton(onClick = { addingType = BudgetTarget.Type.GOAL }) { Text("+ Add long-term goal") }
+            if (!hasLimit) AddButton(onClick = { addingType = BudgetTarget.Type.LIMIT }) { Text(stringResource(R.string.automation_add_balance_cap)) }
+            if (!hasGoal) AddButton(onClick = { addingType = BudgetTarget.Type.GOAL }) { Text(stringResource(R.string.automation_add_long_goal)) }
 
-            errors.forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            errors.forEach { Text(localizedAutomationError(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Spacer(Modifier.height(8.dp))
             Button(
                 enabled = errors.isEmpty(),
                 onClick = { onSave(entries); onBack() },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (entries.isEmpty()) "Save (remove automations)" else "Save automations") }
+            ) { Text(stringResource(if (entries.isEmpty()) R.string.automation_save_remove else R.string.automation_save)) }
             Spacer(Modifier.height(20.dp))
         }
     }
@@ -182,9 +188,9 @@ fun BudgetAutomationScreen(
 private fun EmptyAutomationsNote() {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("No automations yet", fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.automation_empty_title), fontWeight = FontWeight.SemiBold)
             Text(
-                "Add an automation to have Actua suggest a budgeted amount for this category each month.",
+                stringResource(R.string.automation_empty_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -194,18 +200,25 @@ private fun EmptyAutomationsNote() {
 
 @Composable
 private fun UnsupportedAutomationNotice(category: BudgetCategory, onBack: () -> Unit, modifier: Modifier = Modifier) {
-    val types = category.unsupportedAutomationTypes.ifEmpty {
-        if (category.automationReadOnly) listOf("notes-managed") else listOf("advanced")
-    }.joinToString()
+    val resources = LocalResources.current
+    val types = if (category.unsupportedAutomationTypes.isEmpty()) {
+        stringResource(if (category.automationReadOnly) R.string.automation_notes_managed_type else R.string.automation_advanced_type)
+    } else {
+        category.unsupportedAutomationTypes
+            .map { resources.getString(unsupportedAutomationTypeLabelRes(it)) }
+            .distinct()
+            .joinToString()
+    }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
-            Text(category.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.common_back)) }
+            Text(category.name.ifBlank { stringResource(R.string.common_unknown) },
+                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Automations are read-only", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.automation_read_only), style = MaterialTheme.typography.titleMedium)
             Text(
-                "This category contains $types automation settings that Actua cannot safely edit yet. Nothing has been changed. Continue managing this category in Actual Budget.",
+                stringResource(R.string.automation_read_only_body, types),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -217,7 +230,7 @@ private fun AutomationSummaryCard(target: BudgetTarget, hideDecimalPlaces: Boole
     Surface(onClick = onClick, color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(target.type.label, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(target.type.labelRes), fontWeight = FontWeight.SemiBold)
                 Text(
                     automationSummary(target, hideDecimalPlaces),
                     style = MaterialTheme.typography.bodySmall,
@@ -227,7 +240,7 @@ private fun AutomationSummaryCard(target: BudgetTarget, hideDecimalPlaces: Boole
             if (target.type.hasPriority) {
                 Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
                     Text(
-                        "P${target.priority}",
+                        stringResource(R.string.automation_priority_badge, target.priority),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                     )
@@ -237,24 +250,43 @@ private fun AutomationSummaryCard(target: BudgetTarget, hideDecimalPlaces: Boole
     }
 }
 
+@Composable
 private fun automationSummary(target: BudgetTarget, hideDecimalPlaces: Boolean): String = when (target.type) {
     BudgetTarget.Type.FIXED -> {
-        val cadence = if (target.everyCount > 1) "every ${target.everyCount} ${target.period.jsonValue}s" else "every ${target.period.jsonValue}"
+        val period = periodLabel(target.period, target.everyCount)
+        val cadence = if (target.everyCount > 1) stringResource(R.string.automation_period_every_count, target.everyCount, period)
+            else stringResource(R.string.automation_period_every, period)
         "${formatMoneyCents(target.amountCents, hideDecimalPlaces)} $cadence"
     }
-    BudgetTarget.Type.BY_DATE -> "${formatMoneyCents(target.amountCents, hideDecimalPlaces)} by ${target.targetMonth}"
-    BudgetTarget.Type.SCHEDULE -> (target.scheduleName ?: "Linked schedule") + adjustmentSuffix(target)
-    BudgetTarget.Type.PERCENTAGE -> "${target.percentage}% of ${if (target.percentagePrevious) "last" else "this"} month's ${target.percentageSource}"
+    BudgetTarget.Type.BY_DATE -> stringResource(R.string.automation_by_date, formatMoneyCents(target.amountCents, hideDecimalPlaces), target.targetMonth.orEmpty())
+    BudgetTarget.Type.SCHEDULE -> (target.scheduleName ?: stringResource(R.string.automation_linked_schedule)) + adjustmentSuffix(target)
+    BudgetTarget.Type.PERCENTAGE -> stringResource(
+        R.string.automation_percent_summary,
+        target.percentage,
+        stringResource(if (target.percentagePrevious) R.string.automation_last_month else R.string.automation_this_month).lowercase(),
+        percentageSourceLabel(target.percentageSource),
+    )
     BudgetTarget.Type.HISTORICAL -> when (target.historicalMode) {
-        BudgetTarget.HistoricalMode.AVERAGE -> "Average of ${target.historicalMonths} recent months" + adjustmentSuffix(target)
-        BudgetTarget.HistoricalMode.COPY -> "Copy from ${target.historicalMonths} months ago"
+        BudgetTarget.HistoricalMode.AVERAGE -> {
+            val average = if (target.historicalMonths == 1) {
+                stringResource(R.string.automation_average_recent_singular)
+            } else {
+                pluralStringResource(R.plurals.automation_average_recent_plural, target.historicalMonths, target.historicalMonths)
+            }
+            average + adjustmentSuffix(target)
+        }
+        BudgetTarget.HistoricalMode.COPY -> if (target.historicalMonths == 1) {
+            stringResource(R.string.automation_copy_ago_singular)
+        } else {
+            pluralStringResource(R.plurals.automation_copy_ago_plural, target.historicalMonths, target.historicalMonths)
+        }
     }
-    BudgetTarget.Type.REFILL -> "Refills to the balance cap"
-    BudgetTarget.Type.REMAINDER -> "Weight ${target.weight}"
+    BudgetTarget.Type.REFILL -> stringResource(R.string.automation_refills_cap)
+    BudgetTarget.Type.REMAINDER -> stringResource(R.string.automation_weight_summary, target.weight)
     BudgetTarget.Type.LIMIT -> {
-        val cadence = (target.limitPeriod ?: BudgetTarget.LimitPeriod.MONTHLY).jsonValue
+        val cadence = limitPeriodLabel(target.limitPeriod ?: BudgetTarget.LimitPeriod.MONTHLY)
         "${formatMoneyCents(target.amountCents, hideDecimalPlaces)} · $cadence" +
-            if (target.limitHold) " · retain excess" else " · release excess"
+            " · " + stringResource(if (target.limitHold) R.string.automation_retain_excess else R.string.automation_release_excess)
     }
     BudgetTarget.Type.GOAL -> formatMoneyCents(target.amountCents, hideDecimalPlaces)
 }
@@ -301,11 +333,11 @@ private fun EditorScaffold(
     var confirmingDelete by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.common_back)) }
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             if (onDelete != null) {
                 IconButton(onClick = { confirmingDelete = true }) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "Remove automation", tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.automation_remove_description), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -318,12 +350,12 @@ private fun EditorScaffold(
     if (confirmingDelete && onDelete != null) {
         AlertDialog(
             onDismissRequest = { confirmingDelete = false },
-            title = { Text("Remove this automation?") },
-            text = { Text("\"$title\" will be removed once you save.") },
-            dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.automation_remove_question)) },
+            text = { Text(stringResource(R.string.automation_remove_body, title)) },
+            dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text(stringResource(R.string.common_cancel)) } },
             confirmButton = {
                 TextButton(onClick = { confirmingDelete = false; onDelete() }) {
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.common_remove), color = MaterialTheme.colorScheme.error)
                 }
             },
         )
@@ -334,7 +366,7 @@ private fun EditorScaffold(
 private fun NoteField(note: String, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = note, onValueChange = onChange, modifier = Modifier.fillMaxWidth(),
-        label = { Text("Note") }, minLines = 2, maxLines = 4,
+        label = { Text(stringResource(R.string.budget_note)) }, minLines = 2, maxLines = 4,
     )
 }
 
@@ -356,35 +388,35 @@ private fun LimitEditor(
     val validStart = period != BudgetTarget.LimitPeriod.WEEKLY || runCatching { LocalDate.parse(startDate) }.isSuccess
     val canSave = amountCents != null && amountCents > 0L && validStart
 
-    EditorScaffold(title = BudgetTarget.Type.LIMIT.label, onBack = onBack, onDelete = onDelete, modifier = modifier) {
-        Text(BudgetTarget.Type.LIMIT.explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SectionTitle("Configuration")
+    EditorScaffold(title = stringResource(BudgetTarget.Type.LIMIT.labelRes), onBack = onBack, onDelete = onDelete, modifier = modifier) {
+        Text(stringResource(BudgetTarget.Type.LIMIT.explanationRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SectionTitle(stringResource(R.string.automation_configuration))
         OutlinedTextField(
             value = amount, onValueChange = { amount = it }, modifier = Modifier.fillMaxWidth(),
-            label = { Text("Amount") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            label = { Text(stringResource(R.string.budget_amount)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
-        Text("Every", style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.automation_every), style = MaterialTheme.typography.titleSmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BudgetTarget.LimitPeriod.entries.forEach { option ->
                 FilledTonalButton(
                     onClick = { period = option }, modifier = Modifier.weight(1f),
                     colors = if (period == option) ButtonDefaults.filledTonalButtonColors()
                         else ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                ) { Text(option.jsonValue.replaceFirstChar(Char::uppercase)) }
+                ) { Text(limitPeriodLabel(option)) }
             }
         }
         Text(
-            "A weekly or daily cap is scaled by the number of weeks/days in the month.",
+            stringResource(R.string.automation_cap_scale),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (period == BudgetTarget.LimitPeriod.WEEKLY) {
-            DateField("Weekly start date", startDate) { datePickerOpen = true }
+            DateField(stringResource(R.string.automation_weekly_start), startDate) { datePickerOpen = true }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Retain existing funds over the cap")
+                Text(stringResource(R.string.automation_retain_over_cap))
                 Text(
-                    if (hold) "Excess carryover stays in the category." else "Excess carryover is released to Ready to Budget.",
+                    stringResource(if (hold) R.string.automation_excess_stays else R.string.automation_excess_released),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -402,7 +434,7 @@ private fun LimitEditor(
                 )
             },
             enabled = canSave, modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (initial == null) "Add balance cap" else "Update balance cap") }
+        ) { Text(stringResource(if (initial == null) R.string.automation_add_cap else R.string.automation_update_cap)) }
         Spacer(Modifier.height(20.dp))
     }
     simpleDatePicker(datePickerOpen, startDate, { datePickerOpen = false }) { startDate = it }
@@ -420,18 +452,18 @@ private fun GoalEditor(
     var note by remember { mutableStateOf(initial?.note ?: "") }
     val amountCents = runCatching { java.math.BigDecimal(amount).movePointRight(2).longValueExact() }.getOrNull()
 
-    EditorScaffold(title = BudgetTarget.Type.GOAL.label, onBack = onBack, onDelete = onDelete, modifier = modifier) {
-        Text(BudgetTarget.Type.GOAL.explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SectionTitle("Configuration")
+    EditorScaffold(title = stringResource(BudgetTarget.Type.GOAL.labelRes), onBack = onBack, onDelete = onDelete, modifier = modifier) {
+        Text(stringResource(BudgetTarget.Type.GOAL.explanationRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SectionTitle(stringResource(R.string.automation_configuration))
         OutlinedTextField(
             value = amount, onValueChange = { amount = it }, modifier = Modifier.fillMaxWidth(),
-            label = { Text("Target amount") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            label = { Text(stringResource(R.string.automation_target_amount)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
         NoteField(note) { note = it }
         Button(
             onClick = { onSave(BudgetTarget(BudgetTarget.Type.GOAL, amountCents = amountCents ?: 0L, note = note.trim().ifBlank { null })) },
             enabled = amountCents != null && amountCents > 0L, modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (initial == null) "Add long-term goal" else "Update long-term goal") }
+        ) { Text(stringResource(if (initial == null) R.string.automation_add_goal else R.string.automation_update_goal)) }
         Spacer(Modifier.height(20.dp))
     }
 }
@@ -578,45 +610,45 @@ private fun ContributionEditor(
         limitHold = if (type == BudgetTarget.Type.REMAINDER) limitHold else false,
     )
 
-    EditorScaffold(title = type.label, onBack = onBack, onDelete = onDelete, modifier = modifier) {
-        SectionTitle("Automation type")
+    EditorScaffold(title = stringResource(type.labelRes), onBack = onBack, onDelete = onDelete, modifier = modifier) {
+        SectionTitle(stringResource(R.string.automation_type))
         ContributionTypeGrid(selected = type, disabled = usedSingletonTypes) { type = it }
 
-        SectionTitle("Configuration")
+        SectionTitle(stringResource(R.string.automation_configuration))
         when (type) {
             BudgetTarget.Type.FIXED -> {
                 OutlinedTextField(
                     value = amount, onValueChange = { amount = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Amount") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    label = { Text(stringResource(R.string.budget_amount)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
-                NumberStepper("Every", everyCount, 1..365) { everyCount = it }
+                NumberStepper(stringResource(R.string.automation_every), everyCount, 1..365) { everyCount = it }
                 Box {
-                    ChoiceField("Period", period.jsonValue.replaceFirstChar(Char::uppercase) + "s") { periodMenu = true }
+                    ChoiceField(stringResource(R.string.automation_period), periodLabel(period, 2)) { periodMenu = true }
                     DropdownMenu(expanded = periodMenu, onDismissRequest = { periodMenu = false }) {
                         BudgetTarget.Period.entries.forEach { option ->
                             DropdownMenuItem(
-                                text = { Text(option.jsonValue.replaceFirstChar(Char::uppercase) + "s") },
+                                text = { Text(periodLabel(option, 2)) },
                                 onClick = { period = option; periodMenu = false },
                             )
                         }
                     }
                 }
-                DateField("Starting", startingDate) { datePickerFor = DateTarget.STARTING_DATE }
+                DateField(stringResource(R.string.automation_starting), startingDate) { datePickerFor = DateTarget.STARTING_DATE }
             }
             BudgetTarget.Type.BY_DATE -> {
                 OutlinedTextField(
                     value = amount, onValueChange = { amount = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Total amount") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    label = { Text(stringResource(R.string.automation_total_amount)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
-                DateField("Target month", targetMonth.take(7) + "-01") { datePickerFor = DateTarget.TARGET_MONTH }
+                DateField(stringResource(R.string.automation_target_month), targetMonth.take(7) + "-01") { datePickerFor = DateTarget.TARGET_MONTH }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Repeats", Modifier.weight(1f))
+                    Text(stringResource(R.string.automation_repeats), Modifier.weight(1f))
                     Switch(checked = repeats, onCheckedChange = { repeats = it })
                 }
                 if (repeats) {
-                    NumberStepper("Repeat every", repeatEvery, 1..50) { repeatEvery = it }
+                    NumberStepper(stringResource(R.string.automation_repeat_every), repeatEvery, 1..50) { repeatEvery = it }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(false to "Months", true to "Years").forEach { (annual, label) ->
+                        listOf(false to stringResource(R.string.automation_months), true to stringResource(R.string.automation_years)).forEach { (annual, label) ->
                             FilledTonalButton(
                                 onClick = { repeatAnnual = annual }, modifier = Modifier.weight(1f),
                                 colors = if (repeatAnnual == annual) ButtonDefaults.filledTonalButtonColors()
@@ -627,32 +659,32 @@ private fun ContributionEditor(
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Allow early spending")
+                        Text(stringResource(R.string.automation_allow_early))
                         Text(
-                            "Spend from the category before the target month without the automation recalculating.",
+                            stringResource(R.string.automation_allow_early_body),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Switch(checked = allowEarlySpending, onCheckedChange = { allowEarlySpending = it })
                 }
                 if (allowEarlySpending) {
-                    DateField("Start spending in", spendFromMonth.take(7) + "-01") { datePickerFor = DateTarget.SPEND_FROM }
+                    DateField(stringResource(R.string.automation_start_spending), spendFromMonth.take(7) + "-01") { datePickerFor = DateTarget.SPEND_FROM }
                 }
             }
             BudgetTarget.Type.SCHEDULE -> {
                 if (scheduleFunding.isEmpty()) {
                     Text(
-                        "No schedules found. Create one from Schedules first.",
+                        stringResource(R.string.automation_no_schedules),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
                     Box {
-                        ChoiceField("Schedule", scheduleName ?: "Select a schedule") { scheduleMenu = true }
+                        ChoiceField(stringResource(R.string.automation_schedule), scheduleName ?: stringResource(R.string.automation_select_schedule)) { scheduleMenu = true }
                         DropdownMenu(expanded = scheduleMenu, onDismissRequest = { scheduleMenu = false }) {
                             scheduleFunding.forEach { schedule ->
                                 DropdownMenuItem(text = {
                                     Column {
-                                        Text(schedule.name ?: "Unnamed schedule")
+                                        Text(schedule.name ?: stringResource(R.string.automation_unnamed_schedule))
                                         Text(formatMoneyCents(schedule.amountCents, hideDecimalPlaces),
                                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
@@ -663,26 +695,26 @@ private fun ContributionEditor(
                 }
                 Box {
                     ChoiceField(
-                        "Savings mode",
-                        if (scheduleFull) "Cover each occurrence when it occurs" else "Save for the next occurrence",
+                        stringResource(R.string.automation_savings_mode),
+                        stringResource(if (scheduleFull) R.string.automation_cover_occurrence else R.string.automation_save_next),
                     ) { savingsModeMenu = true }
                     DropdownMenu(expanded = savingsModeMenu, onDismissRequest = { savingsModeMenu = false }) {
-                        DropdownMenuItem(text = { Text("Save for the next occurrence") }, onClick = { scheduleFull = false; savingsModeMenu = false })
-                        DropdownMenuItem(text = { Text("Cover each occurrence when it occurs") }, onClick = { scheduleFull = true; savingsModeMenu = false })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.automation_save_next)) }, onClick = { scheduleFull = false; savingsModeMenu = false })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.automation_cover_occurrence)) }, onClick = { scheduleFull = true; savingsModeMenu = false })
                     }
                 }
             }
             BudgetTarget.Type.PERCENTAGE -> {
-                NumberStepper("Percentage", percentage, 1..100) { percentage = it }
+                NumberStepper(stringResource(R.string.automation_percentage), percentage, 1..100) { percentage = it }
                 Box {
-                    ChoiceField("Percentage of", if (percentagePrevious) "Last month" else "This month") { percentageOfMenu = true }
+                    ChoiceField(stringResource(R.string.automation_percentage_of), stringResource(if (percentagePrevious) R.string.automation_last_month else R.string.automation_this_month)) { percentageOfMenu = true }
                     DropdownMenu(expanded = percentageOfMenu, onDismissRequest = { percentageOfMenu = false }) {
-                        DropdownMenuItem(text = { Text("This month") }, onClick = { percentagePrevious = false; percentageOfMenu = false })
-                        DropdownMenuItem(text = { Text("Last month") }, onClick = { percentagePrevious = true; percentageOfMenu = false })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.automation_this_month)) }, onClick = { percentagePrevious = false; percentageOfMenu = false })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.automation_last_month)) }, onClick = { percentagePrevious = true; percentageOfMenu = false })
                     }
                 }
                 Box {
-                    ChoiceField("Income source", percentageSourceLabel(percentageSource)) { percentageSourceMenu = true }
+                    ChoiceField(stringResource(R.string.automation_income_source), percentageSourceLabel(percentageSource)) { percentageSourceMenu = true }
                     DropdownMenu(expanded = percentageSourceMenu, onDismissRequest = { percentageSourceMenu = false }) {
                         (listOf("available funds", "all income") + incomeCategories).distinct().forEach { source ->
                             DropdownMenuItem(
@@ -696,21 +728,21 @@ private fun ContributionEditor(
             BudgetTarget.Type.HISTORICAL -> {
                 Box {
                     ChoiceField(
-                        "Mode",
-                        if (historicalMode == BudgetTarget.HistoricalMode.COPY) "Copy a previous month" else "Average of previous months",
+                        stringResource(R.string.automation_mode),
+                        stringResource(if (historicalMode == BudgetTarget.HistoricalMode.COPY) R.string.automation_copy_previous else R.string.automation_average_previous),
                     ) { historicalModeMenu = true }
                     DropdownMenu(expanded = historicalModeMenu, onDismissRequest = { historicalModeMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("Average of previous months") },
+                            text = { Text(stringResource(R.string.automation_average_previous)) },
                             onClick = { historicalMode = BudgetTarget.HistoricalMode.AVERAGE; historicalModeMenu = false },
                         )
                         DropdownMenuItem(
-                            text = { Text("Copy a previous month") },
+                            text = { Text(stringResource(R.string.automation_copy_previous)) },
                             onClick = { historicalMode = BudgetTarget.HistoricalMode.COPY; historicalModeMenu = false },
                         )
                     }
                 }
-                NumberStepper("Months back", historicalMonths, 1..24) { historicalMonths = it }
+                NumberStepper(stringResource(R.string.automation_months_back), historicalMonths, 1..24) { historicalMonths = it }
             }
             BudgetTarget.Type.REFILL -> {
                 if (BudgetTarget.Type.LIMIT !in usedSingletonTypes) {
@@ -718,7 +750,7 @@ private fun ContributionEditor(
                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
                             Text(
-                                "Add a balance cap automation to set the refill target.",
+                                stringResource(R.string.automation_refill_needs_cap),
                                 modifier = Modifier.padding(start = 10.dp),
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                             )
@@ -726,22 +758,22 @@ private fun ContributionEditor(
                     }
                 } else {
                     Text(
-                        "Tops the category back up to its balance cap each month. No amount of its own.",
+                        stringResource(R.string.automation_refill_body),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             BudgetTarget.Type.REMAINDER -> {
-                NumberStepper("Weight", weight, 1..20) { weight = it }
+                NumberStepper(stringResource(R.string.automation_weight), weight, 1..20) { weight = it }
                 Text(
-                    "Categories with higher weights get a bigger share of the leftover To Budget.",
+                    stringResource(R.string.automation_weight_body),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                SectionTitle("Optional cap")
+                SectionTitle(stringResource(R.string.automation_optional_cap))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = limitAmount, onValueChange = { limitAmount = it }, modifier = Modifier.weight(1f),
-                        label = { Text("Limit amount") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        label = { Text(stringResource(R.string.automation_limit_amount)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
                     TextButton(onClick = {
                         limitPeriod = when (limitPeriod) {
@@ -750,14 +782,14 @@ private fun ContributionEditor(
                             BudgetTarget.LimitPeriod.WEEKLY -> BudgetTarget.LimitPeriod.DAILY
                             BudgetTarget.LimitPeriod.DAILY -> null
                         }
-                    }) { Text(limitPeriod?.jsonValue ?: "No cap") }
+                    }) { Text(limitPeriod?.let { limitPeriodLabel(it) } ?: stringResource(R.string.automation_no_cap)) }
                 }
                 if (limitPeriod == BudgetTarget.LimitPeriod.WEEKLY) {
-                    DateField("Weekly start date", limitStartDate) { datePickerFor = DateTarget.LIMIT_START }
+                    DateField(stringResource(R.string.automation_weekly_start), limitStartDate) { datePickerFor = DateTarget.LIMIT_START }
                 }
                 if (limitPeriod != null) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Hold excess carryover", Modifier.weight(1f))
+                        Text(stringResource(R.string.automation_hold_excess), Modifier.weight(1f))
                         Switch(checked = limitHold, onCheckedChange = { limitHold = it })
                     }
                 }
@@ -766,12 +798,12 @@ private fun ContributionEditor(
         }
 
         if (adjustmentApplicable) {
-            SectionTitle("Adjustment")
+            SectionTitle(stringResource(R.string.automation_adjustment))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Increase or decrease the computed amount")
+                    Text(stringResource(R.string.automation_adjustment_body))
                     Text(
-                        "Matches Actual's \"increase\"/\"decrease\" modifier.",
+                        stringResource(R.string.automation_adjustment_actual),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -779,7 +811,7 @@ private fun ContributionEditor(
             }
             if (adjustmentEnabled) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(true to "Increase", false to "Decrease").forEach { (increase, label) ->
+                    listOf(true to stringResource(R.string.automation_increase), false to stringResource(R.string.automation_decrease)).forEach { (increase, label) ->
                         FilledTonalButton(
                             onClick = { adjustmentIncrease = increase }, modifier = Modifier.weight(1f),
                             colors = if (adjustmentIncrease == increase) ButtonDefaults.filledTonalButtonColors()
@@ -790,7 +822,7 @@ private fun ContributionEditor(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = adjustmentMagnitude, onValueChange = { adjustmentMagnitude = it }, modifier = Modifier.weight(1f),
-                        label = { Text(if (adjustmentType == BudgetTarget.AdjustmentType.PERCENT) "Percent" else "Amount") },
+                        label = { Text(stringResource(if (adjustmentType == BudgetTarget.AdjustmentType.PERCENT) R.string.automation_percent else R.string.budget_amount)) },
                         singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
                     TextButton(onClick = {
@@ -799,17 +831,17 @@ private fun ContributionEditor(
                         } else {
                             BudgetTarget.AdjustmentType.PERCENT
                         }
-                    }) { Text(if (adjustmentType == BudgetTarget.AdjustmentType.PERCENT) "%" else "Fixed") }
+                    }) { Text(if (adjustmentType == BudgetTarget.AdjustmentType.PERCENT) "%" else stringResource(R.string.automation_fixed)) }
                 }
             }
         }
 
-        if (type.hasPriority) NumberStepper("Priority", priority, 1..30) { priority = it }
+        if (type.hasPriority) NumberStepper(stringResource(R.string.automation_priority), priority, 1..30) { priority = it }
         NoteField(note) { note = it }
-        Text(type.explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(type.explanationRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Button(onClick = { onSave(buildTarget()) }, enabled = canSave, modifier = Modifier.fillMaxWidth()) {
-            Text(if (initial == null) "Add automation" else "Update automation")
+            Text(stringResource(if (initial == null) R.string.automation_add else R.string.automation_update).removePrefix("+ "))
         }
         Spacer(Modifier.height(20.dp))
     }
@@ -836,9 +868,9 @@ private fun ContributionEditor(
                         }
                     }
                     datePickerFor = null
-                }) { Text("OK") }
+                }) { Text(androidx.compose.ui.res.stringResource(android.R.string.ok)) }
             },
-            dismissButton = { TextButton(onClick = { datePickerFor = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { datePickerFor = null }) { Text(stringResource(R.string.common_cancel)) } },
         ) { DatePicker(picker) }
     }
 }
@@ -876,7 +908,7 @@ private fun TypeCard(type: BudgetTarget.Type, selected: Boolean, enabled: Boolea
         Column(Modifier.fillMaxSize().padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    type.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                    stringResource(type.labelRes), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                     color = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant
                         else if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                 )
@@ -887,7 +919,7 @@ private fun TypeCard(type: BudgetTarget.Type, selected: Boolean, enabled: Boolea
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                if (!enabled) "Only one per category" else type.explanation,
+                if (!enabled) stringResource(R.string.automation_only_one) else stringResource(type.explanationRes),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 3,
@@ -919,20 +951,29 @@ private fun ChoiceField(label: String, value: String, onClick: () -> Unit) {
                 Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(value, fontWeight = FontWeight.SemiBold)
             }
-            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Choose $label")
+            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = stringResource(R.string.automation_choose, label))
         }
     }
 }
 
 @Composable
 private fun DateField(label: String, isoDate: String, onClick: () -> Unit) {
+    val locale = LocalConfiguration.current.locales[0]
     Surface(onClick = onClick, color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(isoDate, fontWeight = FontWeight.SemiBold)
+                Text(
+                    runCatching {
+                        LocalDate.parse(isoDate).format(
+                            java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+                                .withLocale(locale),
+                        )
+                    }.getOrDefault(isoDate),
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
-            Icon(Icons.Outlined.DateRange, contentDescription = "Choose $label")
+            Icon(Icons.Outlined.DateRange, contentDescription = stringResource(R.string.automation_choose, label))
         }
     }
 }
@@ -965,9 +1006,9 @@ private fun simpleDatePicker(open: Boolean, current: String, onDismiss: () -> Un
                     onPick(Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate().toString())
                 }
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(androidx.compose.ui.res.stringResource(android.R.string.ok)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     ) { DatePicker(picker) }
 }
 
@@ -983,8 +1024,86 @@ private fun adjustmentSuffix(target: BudgetTarget): String = when (target.adjust
     null -> ""
 }
 
+@Composable
+private fun localizedAutomationError(error: String): String {
+    val direct = when (error) {
+        "A category can have at most 20 automations" -> R.string.automation_error_max
+        "Only one refill automation is allowed" -> R.string.automation_error_one_refill
+        "Only one balance cap automation is allowed" -> R.string.automation_error_one_cap
+        "Only one long-term goal automation is allowed" -> R.string.automation_error_one_goal
+        "Only one remainder automation is allowed" -> R.string.automation_error_one_remainder
+        "Refill to cap needs a balance cap automation" -> R.string.automation_error_refill_cap
+        "Remainder weight must be at least 1" -> R.string.automation_error_weight
+        "Remainder limits must be positive" -> R.string.automation_error_positive_limit
+        "Remainder limits need both a period and amount" -> R.string.automation_error_limit_fields
+        "Weekly remainder limits need a valid start date" -> R.string.automation_error_remainder_date
+        "Weekly balance caps need a valid start date" -> R.string.automation_error_cap_date
+        "Only weekly balance caps can have a start date" -> R.string.automation_error_weekly_start_only
+        "Automation priority cannot be negative" -> R.string.automation_error_priority
+        "Balance cap needs a positive amount" -> R.string.automation_error_positive_cap
+        "Percentage automations must be between 1 and 100" -> R.string.automation_error_percentage
+        "From-history automations must look back 1 to 24 months" -> R.string.automation_error_history
+        "Percentage automations need an income source" -> R.string.automation_error_income_source
+        "Adjustments need a value" -> R.string.automation_error_adjustment
+        "Schedule automations need a schedule ID or name" -> R.string.automation_error_schedule
+        "Schedule and date automations must use the same priority" -> R.string.automation_error_shared_priority
+        "Date targets must use the same priority" -> R.string.automation_error_date_priority
+        else -> null
+    }
+    if (direct != null) return stringResource(direct)
+    val index = Regex("""Automation (\d+) needs""").find(error)?.groupValues?.get(1)?.toIntOrNull()
+    return when {
+        index != null && error.endsWith("a positive amount") ->
+            stringResource(R.string.automation_error_positive_amount, index)
+        index != null && error.endsWith("a valid target month") ->
+            stringResource(R.string.automation_error_target_month, index)
+        index != null && error.endsWith("a valid starting date") ->
+            stringResource(R.string.automation_error_start_date, index)
+        else -> stringResource(R.string.automation_error_unknown)
+    }
+}
+
+@StringRes
+private fun unsupportedAutomationTypeLabelRes(type: String): Int = when (type) {
+    BudgetAutomationDocument.UNSUPPORTED_UNKNOWN -> R.string.automation_unsupported_type_unknown
+    BudgetAutomationDocument.UNSUPPORTED_INVALID_DEFINITION -> R.string.automation_unsupported_invalid_definition
+    BudgetAutomationDocument.UNSUPPORTED_BY_PRIORITIES -> R.string.automation_unsupported_by_priorities
+    BudgetAutomationDocument.UNSUPPORTED_INVALID_SUPPORTED_DEFINITION ->
+        R.string.automation_unsupported_invalid_supported_definition
+    "periodic" -> BudgetTarget.Type.FIXED.labelRes
+    "by", "spend" -> BudgetTarget.Type.BY_DATE.labelRes
+    "schedule" -> BudgetTarget.Type.SCHEDULE.labelRes
+    "percentage" -> BudgetTarget.Type.PERCENTAGE.labelRes
+    "average", "copy" -> BudgetTarget.Type.HISTORICAL.labelRes
+    "refill" -> BudgetTarget.Type.REFILL.labelRes
+    "remainder" -> BudgetTarget.Type.REMAINDER.labelRes
+    "limit" -> BudgetTarget.Type.LIMIT.labelRes
+    "goal" -> BudgetTarget.Type.GOAL.labelRes
+    else -> R.string.automation_unsupported_type_unknown
+}
+
+@Composable
 private fun percentageSourceLabel(source: String): String = when (source.lowercase()) {
-    "available funds" -> "Available funds"
-    "all income" -> "All income"
+    "available funds" -> stringResource(R.string.automation_available_funds)
+    "all income" -> stringResource(R.string.automation_all_income)
     else -> source
 }
+
+@Composable
+private fun periodLabel(period: BudgetTarget.Period, quantity: Int): String = stringResource(
+    when (period) {
+        BudgetTarget.Period.DAY -> if (quantity == 1) R.string.automation_period_day_singular else R.string.automation_period_day_plural
+        BudgetTarget.Period.WEEK -> if (quantity == 1) R.string.automation_period_week_singular else R.string.automation_period_week_plural
+        BudgetTarget.Period.MONTH -> if (quantity == 1) R.string.automation_period_month_singular else R.string.automation_period_month_plural
+        BudgetTarget.Period.YEAR -> if (quantity == 1) R.string.automation_period_year_singular else R.string.automation_period_year_plural
+    },
+)
+
+@Composable
+private fun limitPeriodLabel(period: BudgetTarget.LimitPeriod): String = stringResource(
+    when (period) {
+        BudgetTarget.LimitPeriod.DAILY -> R.string.automation_limit_daily
+        BudgetTarget.LimitPeriod.WEEKLY -> R.string.automation_limit_weekly
+        BudgetTarget.LimitPeriod.MONTHLY -> R.string.automation_limit_monthly
+    },
+)

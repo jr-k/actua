@@ -21,6 +21,7 @@ import com.azimulkabir.actua.MainActivity
 import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.ActuaRepository
 import com.azimulkabir.actua.data.preferences.DisplayPreferences
+import com.azimulkabir.actua.data.preferences.withAppLanguage
 import com.azimulkabir.actua.data.schedules.DayDate
 import com.azimulkabir.actua.model.CreditCardStatus
 import com.azimulkabir.actua.ui.components.CurrencyDisplay
@@ -118,14 +119,15 @@ object CreditCardDueNotificationScheduler {
 class CreditCardDueNotificationWorker(context: Context, parameters: WorkerParameters) :
     CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {
-        val settings = CreditCardNotificationSettings(applicationContext)
-        if (!settings.isEnabled || !notificationsAllowed(applicationContext)) return Result.success()
+        val localizedContext = applicationContext.withAppLanguage()
+        val settings = CreditCardNotificationSettings(localizedContext)
+        if (!settings.isEnabled || !notificationsAllowed(localizedContext)) return Result.success()
         val accountId = inputData.getString(ACCOUNT_ID) ?: return Result.failure()
         val dueDate = DayDate.fromYyyymmdd(inputData.getInt(DUE_DATE, 0)) ?: return Result.failure()
         val offset = inputData.getInt(OFFSET_DAYS, 0)
         if (offset !in CreditCardReminderPlanner.reminderOffsets) return Result.failure()
 
-        val repository = ActuaRepository(applicationContext)
+        val repository = ActuaRepository(localizedContext)
         val card = try { repository.creditCards().firstOrNull { it.accountId == accountId } }
             finally { repository.close() }
         val today = DayDate.today()
@@ -133,7 +135,7 @@ class CreditCardDueNotificationWorker(context: Context, parameters: WorkerParame
             card.cycle.upcomingDueDate(today) != dueDate || today.daysUntil(dueDate) != offset) {
             return Result.success()
         }
-        postNotification(applicationContext, card, dueDate, offset)
+        postNotification(localizedContext, card, dueDate, offset)
         return Result.success()
     }
 
@@ -153,8 +155,10 @@ private fun postNotification(context: Context, card: CreditCardStatus, dueDate: 
 
     val manager = context.getSystemService(NotificationManager::class.java)
     manager.createNotificationChannel(NotificationChannel(
-        CHANNEL_ID, "Credit card due dates", NotificationManager.IMPORTANCE_DEFAULT
-    ).apply { description = "Payment reminders for tracked credit cards" })
+        CHANNEL_ID,
+        context.getString(R.string.credit_card_due_channel_name),
+        NotificationManager.IMPORTANCE_DEFAULT,
+    ).apply { description = context.getString(R.string.credit_card_due_channel_description) })
     val openApp = PendingIntent.getActivity(
         context, card.accountId.hashCode(), Intent(context, MainActivity::class.java),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -164,15 +168,21 @@ private fun postNotification(context: Context, card: CreditCardStatus, dueDate: 
     CurrencyDisplay.symbolOnly = display.currencySymbolOnly
     NumberDisplay.format = display.numberFormat
     DateDisplay.format = display.dateFormat
+    val locale = context.resources.configuration.locales[0]
     val amount = formatMoneyCents(kotlin.math.abs(card.balanceCents), display.hideDecimalPlaces,
-        respectBalanceVisibility = false)
-    val date = formatDate(LocalDate.of(dueDate.year, dueDate.month, dueDate.day))
-    val whenText = if (offset == 1) "tomorrow" else "in $offset days"
+        respectBalanceVisibility = false, locale = locale)
+    val date = formatDate(LocalDate.of(dueDate.year, dueDate.month, dueDate.day), locale)
+    val whenText = if (offset == 1) {
+        context.getString(R.string.credit_card_due_tomorrow)
+    } else {
+        context.resources.getQuantityString(R.plurals.credit_card_due_in_days, offset, offset)
+    }
+    val body = context.getString(R.string.credit_card_notification_body, amount, date)
     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(R.drawable.actua_launcher_monochrome)
-        .setContentTitle("${card.accountName} payment due $whenText")
-        .setContentText("Current balance $amount. Payment due $date.")
-        .setStyle(NotificationCompat.BigTextStyle().bigText("Current balance $amount. Payment due $date."))
+        .setContentTitle(context.getString(R.string.credit_card_notification_title, card.accountName, whenText))
+        .setContentText(body)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
         .setContentIntent(openApp).setAutoCancel(true).setCategory(NotificationCompat.CATEGORY_REMINDER)
         .build()
     NotificationManagerCompat.from(context).notify(card.accountId.hashCode() * 31 + offset, notification)

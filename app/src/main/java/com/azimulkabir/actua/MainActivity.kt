@@ -2,9 +2,9 @@ package com.azimulkabir.actua
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 data class AppLaunchRequest(val action: String, val target: String?, val nonce: Long = System.nanoTime())
 const val SHARED_IMPORT_ACTION = "com.azimulkabir.actua.IMPORT_SHARED_TEXT"
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private var foregroundGeneration by mutableIntStateOf(0)
     private var launchRequest by mutableStateOf<AppLaunchRequest?>(null)
 

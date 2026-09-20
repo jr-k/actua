@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_listener_label">Bank transaction import</string>
+    <string name="disconnect_reset_title">Disconnect &amp; reset?</string>
+    <string name="disconnect_reset_message">Actua will sync every downloaded server budget, then remove downloaded server budgets, local backups, encryption keys, and connection data from this device. Your budgets on the Actual server will not be deleted. Device display settings and the local demo budget will be kept.</string>
+    <string name="disconnect_reset_action">Disconnect &amp; reset</string>
+    <string name="widget_action_cancel">Cancel</string>
+    <string name="disconnect_syncing_title">Syncing before disconnect</string>
+    <string name="disconnect_syncing_message">Saving the latest Actual and Actua changes from every downloaded server budget before local data is removed.</string>
+    <string name="disconnect_sync_failed_title">Couldn’t sync latest changes</string>
+    <string name="disconnect_sync_failed_message">Actua did not remove any local budget data. Disconnecting anyway may permanently discard changes that have not reached your Actual server.</string>
+    <string name="disconnect_anyway">Disconnect anyway</string>
+    <string name="disconnect_try_again">Try again</string>
+    <string name="disconnect_error_sync_failed">Sync failed.</string>
+    <string name="disconnect_error_missing_server_identity">%1$s has no server identity and cannot be safely removed after sync.</string>
+    <string name="disconnect_error_not_configured">%1$s is not configured for server sync.</string>
+    <string name="disconnect_error_encryption_locked">%1$s is encrypted and locked. Unlock it before disconnecting, or disconnect anyway.</string>
+    <string name="disconnect_error_reset_failed">Could not reset local Actua data.</string>
+
+    <string name="widget_off_budget">Off budget</string>
+    <string name="widget_add">Add widget</string>
+    <string name="widget_choose_categories">Choose up to four categories to add to your shared favorites.</string>
+    <string name="widget_choose_accounts">Choose up to four accounts.</string>
+    <string name="widget_no_available_items">No available items in the open budget.</string>
+    <string name="widget_schedule_period_prompt">Show scheduled transactions due within:</string>
+    <plurals name="widget_period_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <string name="widget_due_today">Today</string>
+    <string name="widget_due_tomorrow">Tomorrow</string>
+    <plurals name="widget_due_in_days">
+        <item quantity="one">In %d day</item>
+        <item quantity="other">In %d days</item>
+    </plurals>
+    <plurals name="widget_days_overdue">
+        <item quantity="one">%d day overdue</item>
+        <item quantity="other">%d days overdue</item>
+    </plurals>
+
+    <string name="credit_card_due_channel_name">Credit card due dates</string>
+    <string name="credit_card_due_channel_description">Payment reminders for tracked credit cards</string>
+    <string name="credit_card_due_tomorrow">tomorrow</string>
+    <plurals name="credit_card_due_in_days">
+        <item quantity="one">in %d day</item>
+        <item quantity="other">in %d days</item>
+    </plurals>
+    <string name="credit_card_notification_title">%1$s payment due %2$s</string>
+    <string name="credit_card_notification_body">Current balance %1$s. Payment due %2$s.</string>
+    <string name="credit_card_due_today">Due today</string>
+    <string name="credit_card_due_tomorrow_summary">Due tomorrow</string>
+    <string name="credit_card_due_date">Due %1$s (%2$d days)</string>
+    <plurals name="credit_card_due_in_days_short">
+        <item quantity="one">Due in %d day</item>
+        <item quantity="other">Due in %d days</item>
+    </plurals>
+</resources>

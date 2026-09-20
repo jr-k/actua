@@ -20,11 +20,13 @@ object DateDisplay {
     @Volatile var format: String = "System default"
 }
 
-fun formatDate(date: LocalDate): String = date.format(when (DateDisplay.format) {
+fun formatDate(date: LocalDate): String = formatDate(date, Locale.getDefault())
+
+fun formatDate(date: LocalDate, locale: Locale): String = date.format(when (DateDisplay.format) {
     "DD/MM/YYYY" -> ddMmYyyyFormatter
     "MM/DD/YYYY" -> mmDdYyyyFormatter
     "YYYY-MM-DD" -> DateTimeFormatter.ISO_LOCAL_DATE
-    else -> mediumDateFormatter
+    else -> mediumDateFormatter.withLocale(locale)
 })
 
 fun parseStoredDate(value: String): LocalDate? = runCatching {
@@ -36,5 +38,8 @@ fun parseStoredDate(value: String): LocalDate? = runCatching {
 }.getOrNull()
 
 fun formatStoredDate(value: String): String = parseStoredDate(value)?.let(::formatDate) ?: value
+
+fun formatStoredDate(value: String, locale: Locale): String =
+    parseStoredDate(value)?.let { formatDate(it, locale) } ?: value
 
 fun storageDate(date: LocalDate): String = date.format(DateTimeFormatter.BASIC_ISO_DATE)

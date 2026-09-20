@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +46,7 @@ import com.azimulkabir.actua.data.home.HomeSection
 import com.azimulkabir.actua.ui.components.ActuaScreenHeader
 import com.azimulkabir.actua.ui.components.dragReorderHandle
 import kotlinx.coroutines.delay
+import com.azimulkabir.actua.R
 
 private const val ROW_HEIGHT_DP = 64
 private const val EDGE_SCROLL_ZONE_PX = 100f
@@ -158,18 +160,18 @@ fun CustomizeHomeScreen(
     val reorderable = remember(localOrder) { localOrder.filterNot { it == HomeSection.READY_TO_BUDGET } }
 
     Column(modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Customize Home", onBack = onBack) {
+        ActuaScreenHeader(title = stringResource(R.string.home_customize), onBack = onBack) {
             IconButton(onClick = {
                 val defaults = HomeLayout.default()
                 localOrder = defaults.order
                 localHidden = defaults.hidden
                 onLayoutChange(defaults)
             }) {
-                Icon(Icons.Outlined.RestartAlt, contentDescription = "Restore default layout")
+                Icon(Icons.Outlined.RestartAlt, contentDescription = stringResource(R.string.home_restore_layout))
             }
         }
         Text(
-            "Drag a handle to reorder, or use the up/down arrows. Ready to Budget always stays first.",
+            stringResource(R.string.home_customize_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -216,11 +218,15 @@ private fun HomeSectionRow(
     canMoveDown: Boolean,
 ) {
     val pinned = section == HomeSection.READY_TO_BUDGET
+    val title = stringResource(section.titleRes)
+    val moveUpDescription = stringResource(R.string.home_move_up, title)
+    val moveDownDescription = stringResource(R.string.home_move_down, title)
+    val showDescription = stringResource(R.string.home_show_section, title)
     Row(modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (!pinned) {
             Icon(
                 Icons.Outlined.DragHandle,
-                contentDescription = "Drag to reorder ${section.title}",
+                contentDescription = stringResource(R.string.home_drag_reorder, title),
                 modifier = Modifier
                     .size(44.dp)
                     .padding(8.dp)
@@ -235,7 +241,7 @@ private fun HomeSectionRow(
             Box(Modifier.size(44.dp))
         }
         Text(
-            section.title,
+            title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             overflow = TextOverflow.Ellipsis,
@@ -245,20 +251,20 @@ private fun HomeSectionRow(
             IconButton(
                 onClick = onMoveUp,
                 enabled = canMoveUp,
-                modifier = Modifier.semantics { contentDescription = "Move ${section.title} up" },
+                modifier = Modifier.semantics { contentDescription = moveUpDescription },
             ) { Icon(Icons.Outlined.KeyboardArrowUp, null) }
             IconButton(
                 onClick = onMoveDown,
                 enabled = canMoveDown,
-                modifier = Modifier.semantics { contentDescription = "Move ${section.title} down" },
+                modifier = Modifier.semantics { contentDescription = moveDownDescription },
             ) { Icon(Icons.Outlined.KeyboardArrowDown, null) }
             Switch(
                 checked = !hidden,
                 onCheckedChange = { checked -> onHiddenChange(!checked) },
-                modifier = Modifier.semantics { contentDescription = "Show ${section.title} on Home" },
+                modifier = Modifier.semantics { contentDescription = showDescription },
             )
         } else {
-            Text("Required", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.home_required), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

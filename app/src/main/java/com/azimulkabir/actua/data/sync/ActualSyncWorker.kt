@@ -47,7 +47,7 @@ object ActualSyncRunner {
         context: Context,
         makeBackup: Boolean = false,
         allowRecentSuccess: Boolean = false,
-        trigger: String = "Sync",
+        trigger: String = SYNC_TRIGGER_MANUAL,
     ): SyncRunResult {
         val app = context.applicationContext
         val status = SyncStatusStore(app)
@@ -69,12 +69,12 @@ object ActualSyncRunner {
         val groupId = metadata.groupId ?: return SyncRunResult.NotConfigured.also { status.stoppedWithoutSync() }
         val loadedKey = metadata.encryptKeyId?.let {
             BudgetEncryptionKeyStore(app).load(fileId) ?: return SyncRunResult.EncryptionKeyUnavailable.also {
-                status.failed(IllegalStateException("Unlock this encrypted budget before syncing"))
+                status.failed(SyncStatusException.EncryptionKeyUnavailable)
             }
         }
         if (metadata.encryptKeyId != null && loadedKey?.keyId != metadata.encryptKeyId) {
             return SyncRunResult.EncryptionKeyUnavailable.also {
-                status.failed(IllegalStateException("Unlock this encrypted budget before syncing"))
+                status.failed(SyncStatusException.EncryptionKeyUnavailable)
             }
         }
         val nowElapsed = SystemClock.elapsedRealtime()
@@ -87,7 +87,7 @@ object ActualSyncRunner {
             )
         ) {
             if (makeBackup) runCatching { BackupService(app, files).makeBackup(budgetId) }
-            if (trigger == "App open") status.foregroundRefreshFinished()
+            if (trigger == SYNC_TRIGGER_APP_OPEN) status.foregroundRefreshFinished()
             return requireNotNull(lastSuccess)
         }
         status.started(trigger)
@@ -134,13 +134,16 @@ internal object SyncCoalescingPolicy {
         nowElapsedMillis - completedElapsedMillis <= RECENT_SUCCESS_WINDOW_MILLIS
 }
 
-/** Emitted for a `REASON_MUTATION` sync: a local change upload, not a refresh of what's on screen. */
-const val SYNC_TRIGGER_AFTER_CHANGE = "After change"
+/** Stable persisted trigger codes. These are translated only when displayed. */
+const val SYNC_TRIGGER_MANUAL = "manual"
+const val SYNC_TRIGGER_AFTER_CHANGE = "after_change"
+const val SYNC_TRIGGER_APP_OPEN = "app_open"
+const val SYNC_TRIGGER_BACKGROUND = "background"
 
 internal fun syncTriggerLabel(reason: String?): String = when (reason) {
     ActualSyncWorker.REASON_MUTATION -> SYNC_TRIGGER_AFTER_CHANGE
-    ActualSyncWorker.REASON_FOREGROUND -> "App open"
-    else -> "Background"
+    ActualSyncWorker.REASON_FOREGROUND -> SYNC_TRIGGER_APP_OPEN
+    else -> SYNC_TRIGGER_BACKGROUND
 }
 
 internal fun allowsRecentSuccess(reason: String?): Boolean =

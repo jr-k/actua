@@ -23,6 +23,20 @@ fun formatMoneyCents(
     hideDecimalPlaces: Boolean,
     showPositiveSign: Boolean = false,
     respectBalanceVisibility: Boolean = true,
+): String = formatMoneyCents(
+    cents,
+    hideDecimalPlaces,
+    Locale.getDefault(),
+    showPositiveSign,
+    respectBalanceVisibility,
+)
+
+fun formatMoneyCents(
+    cents: Long,
+    hideDecimalPlaces: Boolean,
+    locale: Locale,
+    showPositiveSign: Boolean = false,
+    respectBalanceVisibility: Boolean = true,
 ): String {
     if (respectBalanceVisibility && BalanceVisibility.hidden) return "••••"
     val sign = when {
@@ -31,13 +45,13 @@ fun formatMoneyCents(
         else -> ""
     }
     val magnitude = cents.absoluteValue
-    val whole = formatWholeNumber(magnitude / 100, NumberDisplay.format)
+    val whole = formatWholeNumber(magnitude / 100, NumberDisplay.format, locale)
     val decimalSeparator = when (NumberDisplay.format) {
         "1.234,56", "1 234,56" -> ","
         else -> "."
     }
     val decimals = if (hideDecimalPlaces) "" else "$decimalSeparator${(magnitude % 100).toString().padStart(2, '0')}"
-    return "$sign${currencyInputPrefix()}$whole$decimals"
+    return "$sign${currencyInputPrefix(locale)}$whole$decimals"
 }
 
 // NumberFormat construction does a locale resource lookup and isn't cheap; this path is hit
@@ -71,15 +85,17 @@ private fun grouped(value: Long, primarySize: Int, separator: String, secondaryS
 }
 
 /** Currency prefix used by editable amount fields so they match the selected display currency. */
-fun currencyInputPrefix(): String {
+fun currencyInputPrefix(): String = currencyInputPrefix(Locale.getDefault())
+
+fun currencyInputPrefix(locale: Locale): String {
     val currency = CurrencyDisplay.code
     if (currency.isBlank()) return ""
-    return if (CurrencyDisplay.symbolOnly) narrowCurrencySymbol(currency)
+    return if (CurrencyDisplay.symbolOnly) narrowCurrencySymbol(currency, locale)
     else if (currency == "BDT") "৳"
-    else runCatching { Currency.getInstance(currency).getSymbol(Locale.getDefault()) }.getOrDefault(currency)
+    else runCatching { Currency.getInstance(currency).getSymbol(locale) }.getOrDefault(currency)
 }
 
-private fun narrowCurrencySymbol(code: String): String = when (code) {
+private fun narrowCurrencySymbol(code: String, locale: Locale): String = when (code) {
     "BDT" -> "৳"
     "USD", "CAD", "AUD", "NZD", "SGD" -> "$"
     "EUR" -> "€"
@@ -88,7 +104,7 @@ private fun narrowCurrencySymbol(code: String): String = when (code) {
     "INR" -> "₹"
     "AED" -> "د.إ"
     "SAR" -> "ر.س"
-    else -> runCatching { Currency.getInstance(code).symbol }.getOrDefault(code)
+    else -> runCatching { Currency.getInstance(code).getSymbol(locale) }.getOrDefault(code)
 }
 
 fun centsToInput(cents: Long): String {
