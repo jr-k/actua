@@ -329,6 +329,7 @@ fun AppNavigation(
     var reportSnapshotVersion by remember(repository) { mutableStateOf(-1) }
     var addOrigin by rememberSaveable { mutableStateOf(MainDestination.Accounts) }
     var transactionFabExpanded by rememberSaveable { mutableStateOf(true) }
+    var transactionsRefreshing by remember { mutableStateOf(false) }
     var reconcileOpen by remember { mutableStateOf(false) }
     var scheduleReturnsToBills by rememberSaveable { mutableStateOf(false) }
     var scheduleReturnsToTransactions by rememberSaveable { mutableStateOf(false) }
@@ -393,6 +394,30 @@ fun AppNavigation(
             false
         },
     )
+
+    fun refreshTransactions() {
+        if (transactionsRefreshing) return
+        transactionsRefreshing = true
+        coroutineScope.launch {
+            try {
+                when (withContext(Dispatchers.IO) {
+                    ActualSyncRunner.run(context, trigger = "Pull to refresh")
+                }) {
+                    is SyncRunResult.Success -> Unit
+                    SyncRunResult.NotConfigured -> dataVersion += 1
+                    SyncRunResult.EncryptionKeyUnavailable -> {
+                        errorMessage = "Unlock this encrypted budget before syncing."
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                errorMessage = error.message?.takeIf(String::isNotBlank) ?: "Sync failed."
+            } finally {
+                transactionsRefreshing = false
+            }
+        }
+    }
 
     // Same contract as [mutate], but the (disk I/O) mutation runs off the main thread and
     // [onChanged] fires afterwards on the main thread once the local write has durably
@@ -921,6 +946,8 @@ fun AppNavigation(
                 },
                 showNotes = showNotes,
                 onReconcileVisibilityChange = { reconcileOpen = it },
+                isRefreshing = transactionsRefreshing,
+                onRefresh = ::refreshTransactions,
             )
             DetailDestination.EditTransaction -> {
             // Otherwise these are rebuilt from the whole account/payee lists on every
@@ -1832,6 +1859,8 @@ fun AppNavigation(
                     linkableSchedules = linkableSchedules,
                     showBackButton = false,
                     returnToRootRequest = rootRequests[MainDestination.Transactions] ?: 0,
+                    isRefreshing = transactionsRefreshing,
+                    onRefresh = ::refreshTransactions,
                 )
                 MainDestination.Manage -> SettingsScreen(
                     modifier = contentModifier,
