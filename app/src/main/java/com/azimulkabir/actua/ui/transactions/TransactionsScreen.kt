@@ -40,6 +40,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -156,6 +157,8 @@ fun TransactionsScreen(
     onViewSchedule: (String) -> Unit = {},
     linkableSchedules: List<ScheduleOption> = emptyList(),
     onViewStatements: (() -> Unit)? = null,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     var search by remember(initialSearch) { mutableStateOf(initialSearch) }
@@ -461,64 +464,88 @@ fun TransactionsScreen(
                 label = { Text("Reconciled") }
             )
         }
-        LazyColumn(
-            state = listState,
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
         ) {
-            account?.let { selectedAccount ->
-                item("account-details") {
-                    AccountDetails(
-                        selectedAccount,
-                        creditCard,
-                        accountNote,
-                        { savedNote -> accountNote = savedNote; onSaveAccountNote(savedNote) },
-                        hideDecimalPlaces,
-                        showCurrentBalanceSummary,
-                        showNotes && showAccountNotes,
-                        onViewStatements,
-                        showCreditCardSection,
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
+            ) {
+                account?.let { selectedAccount ->
+                    item("account-details") {
+                        AccountDetails(
+                            selectedAccount,
+                            creditCard,
+                            accountNote,
+                            { savedNote -> accountNote = savedNote; onSaveAccountNote(savedNote) },
+                            hideDecimalPlaces,
+                            showCurrentBalanceSummary,
+                            showNotes && showAccountNotes,
+                            onViewStatements,
+                            showCreditCardSection,
+                        )
+                    }
+                }
+                item("transaction-total") {
+                    val total = visible.sumOf { it.amountCents }
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.screenHorizontal, vertical = 10.dp)) {
+                        Text("${visible.size} transactions", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.weight(1f))
+                        Amount(total, FontWeight.Bold, hideDecimalPlaces)
+                    }
+                }
+                if (visible.isEmpty()) item("empty-transactions") {
+                    Text(
+                        when {
+                            search.isNotBlank() -> "No matching transactions"
+                            transactionStatusFilter == TransactionStatusFilter.UNCATEGORIZED -> "No uncategorized transactions"
+                            transactionStatusFilter == TransactionStatusFilter.UNCLEARED -> "No uncleared transactions"
+                            transactionStatusFilter == TransactionStatusFilter.CLEARED -> "No cleared transactions"
+                            transactionStatusFilter == TransactionStatusFilter.RECONCILED -> "No reconciled transactions"
+                            hideReconciledTransactions -> "No unreconciled transactions"
+                            else -> "No transactions"
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(Spacing.screenHorizontal),
                     )
                 }
-            }
-            item("transaction-total") {
-                val total = visible.sumOf { it.amountCents }
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.screenHorizontal, vertical = 10.dp)) {
-                    Text("${visible.size} transactions", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.weight(1f))
-                    Amount(total, FontWeight.Bold, hideDecimalPlaces)
-                }
-            }
-            if (visible.isEmpty()) item("empty-transactions") {
-                Text(
-                    when {
-                        search.isNotBlank() -> "No matching transactions"
-                        transactionStatusFilter == TransactionStatusFilter.UNCATEGORIZED -> "No uncategorized transactions"
-                        transactionStatusFilter == TransactionStatusFilter.UNCLEARED -> "No uncleared transactions"
-                        transactionStatusFilter == TransactionStatusFilter.CLEARED -> "No cleared transactions"
-                        transactionStatusFilter == TransactionStatusFilter.RECONCILED -> "No reconciled transactions"
-                        hideReconciledTransactions -> "No unreconciled transactions"
-                        else -> "No transactions"
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(Spacing.screenHorizontal),
-                )
-            }
-            if (groupTransactionsByDate) {
-                groupedByDate.forEach { (date, transactions) ->
-                    stickyHeader(key = date) {
-                        Text(formatTransactionDate(date), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer)
-                                .padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.sm))
+                if (groupTransactionsByDate) {
+                    groupedByDate.forEach { (date, transactions) ->
+                        stickyHeader(key = date) {
+                            Text(formatTransactionDate(date), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer)
+                                    .padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.sm))
+                        }
+                        items(transactions, key = { it.id }) { transaction ->
+                            // Every visible row reads the same `selectedIds` set, so a plain
+                            // `transaction.id in selectedIds` recomposes every visible row on any
+                            // selection toggle. derivedStateOf only reports a change (and thus only
+                            // recomposes) the row(s) whose membership actually flipped.
+                            val isSelected by remember(transaction.id) { derivedStateOf { transaction.id in selectedIds } }
+                            TransactionRow(transaction, hideDecimalPlaces, showDate = false,
+                                onClick = {
+                                    if (selectionModeOn) {
+                                        selectedIds = selectedIds.toggle(transaction.id)
+                                    } else viewed = transaction
+                                },
+                                showAccount = accountName == null,
+                                onLongClick = {
+                                    if (selectionModeOn) selectedIds = selectedIds.toggle(transaction.id)
+                                    else selected = transaction
+                                },
+                                onClearedClick = { onSetCleared(transaction, !transaction.cleared) }, tagColors = tagColors,
+                                selectionMode = selectionModeOn, selected = isSelected,
+                                runningBalanceCents = runningBalances[transaction.id])
+                        }
                     }
-                    items(transactions, key = { it.id }) { transaction ->
-                        // Every visible row reads the same `selectedIds` set, so a plain
-                        // `transaction.id in selectedIds` recomposes every visible row on any
-                        // selection toggle. derivedStateOf only reports a change (and thus only
-                        // recomposes) the row(s) whose membership actually flipped.
+                } else {
+                    items(visible, key = { it.id }) { transaction ->
                         val isSelected by remember(transaction.id) { derivedStateOf { transaction.id in selectedIds } }
-                        TransactionRow(transaction, hideDecimalPlaces, showDate = false,
+                        TransactionRow(transaction, hideDecimalPlaces, showDate = true,
                             onClick = {
                                 if (selectionModeOn) {
                                     selectedIds = selectedIds.toggle(transaction.id)
@@ -533,24 +560,6 @@ fun TransactionsScreen(
                             selectionMode = selectionModeOn, selected = isSelected,
                             runningBalanceCents = runningBalances[transaction.id])
                     }
-                }
-            } else {
-                items(visible, key = { it.id }) { transaction ->
-                    val isSelected by remember(transaction.id) { derivedStateOf { transaction.id in selectedIds } }
-                    TransactionRow(transaction, hideDecimalPlaces, showDate = true,
-                        onClick = {
-                            if (selectionModeOn) {
-                                selectedIds = selectedIds.toggle(transaction.id)
-                            } else viewed = transaction
-                        },
-                        showAccount = accountName == null,
-                        onLongClick = {
-                            if (selectionModeOn) selectedIds = selectedIds.toggle(transaction.id)
-                            else selected = transaction
-                        },
-                        onClearedClick = { onSetCleared(transaction, !transaction.cleared) }, tagColors = tagColors,
-                        selectionMode = selectionModeOn, selected = isSelected,
-                        runningBalanceCents = runningBalances[transaction.id])
                 }
             }
         }
