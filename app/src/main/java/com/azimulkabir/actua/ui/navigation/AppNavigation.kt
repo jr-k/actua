@@ -329,6 +329,7 @@ fun AppNavigation(
     var reportSnapshotVersion by remember(repository) { mutableStateOf(-1) }
     var addOrigin by rememberSaveable { mutableStateOf(MainDestination.Accounts) }
     var transactionFabExpanded by rememberSaveable { mutableStateOf(true) }
+    var accountsSyncing by remember { mutableStateOf(false) }
     var reconcileOpen by remember { mutableStateOf(false) }
     var scheduleReturnsToBills by rememberSaveable { mutableStateOf(false) }
     var scheduleReturnsToTransactions by rememberSaveable { mutableStateOf(false) }
@@ -393,6 +394,35 @@ fun AppNavigation(
             false
         },
     )
+
+    fun syncFromAccounts() {
+        if (accountsSyncing || syncStatus.running) return
+        accountsSyncing = true
+        coroutineScope.launch {
+            try {
+                when (withContext(Dispatchers.IO) {
+                    ActualSyncRunner.run(context, trigger = "Manual")
+                }) {
+                    is SyncRunResult.Success -> withContext(Dispatchers.IO) {
+                        CreditCardDueNotificationScheduler.refresh(appContext)
+                        WidgetUpdater.requestAll(appContext)
+                    }
+                    SyncRunResult.NotConfigured -> {
+                        errorMessage = "Download and select a budget first."
+                    }
+                    SyncRunResult.EncryptionKeyUnavailable -> {
+                        errorMessage = "Unlock this encrypted budget before syncing."
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                errorMessage = error.message?.takeIf(String::isNotBlank) ?: "Sync failed."
+            } finally {
+                accountsSyncing = false
+            }
+        }
+    }
 
     // Same contract as [mutate], but the (disk I/O) mutation runs off the main thread and
     // [onChanged] fires afterwards on the main thread once the local write has durably
@@ -1750,6 +1780,8 @@ fun AppNavigation(
                         mutate("Creating account") { repository.createAccount(name, offBudget, balance, type) }
                     },
                     onSearch = { detail = DetailDestination.Search },
+                    syncing = accountsSyncing || syncStatus.running,
+                    onSync = ::syncFromAccounts,
                     favoriteAccountIds = favoriteAccountIds,
                     onFavoriteAccountChange = { id, favorite ->
                         favoritePreferences.set(favoriteBudgetId, FavoritePreferences.Type.ACCOUNT, id, favorite)

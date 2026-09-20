@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -29,6 +30,8 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +54,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azimulkabir.actua.model.Account
@@ -103,6 +108,8 @@ fun AccountsScreen(
     onChangeAccountType: (Account, String) -> Unit = { _, _ -> },
     onCreateAccount: (String, Boolean, String, String) -> Unit = { _, _, _, _ -> },
     onSearch: () -> Unit = {},
+    syncing: Boolean = false,
+    onSync: () -> Unit = {},
     favoriteAccountIds: Set<String> = emptySet(),
     onFavoriteAccountChange: (String, Boolean) -> Unit = { _, _ -> },
     scrollToTopRequest: Int = 0,
@@ -135,6 +142,22 @@ fun AccountsScreen(
                 tonalElevation = 2.dp,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onSync,
+                        enabled = !syncing,
+                        modifier = Modifier.semantics {
+                            contentDescription = if (syncing) "Syncing" else "Sync now"
+                        },
+                    ) {
+                        if (syncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Outlined.Sync, contentDescription = null)
+                        }
+                    }
                     IconButton(onClick = onSearch) {
                         Icon(Icons.Outlined.Search, contentDescription = "Search Actua")
                     }
