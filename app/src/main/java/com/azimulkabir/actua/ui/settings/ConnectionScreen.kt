@@ -38,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -212,6 +213,7 @@ internal fun ManualSyncButtonContent(
 fun ConnectionScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    foregroundGeneration: Int = 0,
     onBeforeBudgetReplacement: () -> Unit = {},
     onBudgetInstalled: () -> Unit = {},
 ) {
@@ -259,6 +261,7 @@ fun ConnectionScreen(
     var deleteConfirmation by remember { mutableStateOf("") }
     var confirmQuickBackup by remember { mutableStateOf(false) }
     var pendingCertificateTrust by remember { mutableStateOf<PendingCertificateTrust?>(null) }
+    var pendingOpenIdCallback by remember { mutableStateOf<OidcCallbackServer?>(null) }
     val demoActive = DemoBudgetManager.isDemoBudget(activeBudget.budgetId)
 
     fun refreshBackups() {
@@ -350,7 +353,6 @@ fun ConnectionScreen(
         loading = true
         message = resources.getString(R.string.preparing_openid)
         scope.launch {
-            var callbackServer: OidcCallbackServer? = null
             runCatching {
                 val pending = withContext(Dispatchers.IO) {
                     val primary = client.normalizeServerUrl(serverUrl)
@@ -382,11 +384,16 @@ fun ConnectionScreen(
                             callbackErrorMessage = resources.getString(R.string.openid_callback_error_message),
                         ),
                     )
-                    callbackServer = callback
-                    val authorizationUrl = client.startOpenIdLogin(selectedUrl, callback.returnUrl, password)
-                    PendingOpenIdLogin(primary, fallback, selectedUrl, authorizationUrl, callback)
+                    try {
+                        val authorizationUrl = client.startOpenIdLogin(selectedUrl, callback.returnUrl, password)
+                        PendingOpenIdLogin(primary, fallback, selectedUrl, authorizationUrl, callback)
+                    } catch (error: Throwable) {
+                        callback.close()
+                        throw error
+                    }
                 }
 
+                pendingOpenIdCallback = pending.callbackServer
                 val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(pending.authorizationUrl))
                 context.startActivity(browserIntent)
                 message = resources.getString(R.string.complete_sign_in_browser)
@@ -423,7 +430,8 @@ fun ConnectionScreen(
                     }
                 }
             }
-            callbackServer?.close()
+            pendingOpenIdCallback?.close()
+            pendingOpenIdCallback = null
             loading = false
         }
     }
@@ -470,6 +478,13 @@ fun ConnectionScreen(
     }
 
     LaunchedEffect(headerEntries) { client.customHeaders = headerEntries.toMap() }
+    LaunchedEffect(foregroundGeneration) {
+        pendingOpenIdCallback?.close()
+    }
+    DisposableEffect(pendingOpenIdCallback) {
+        val callback = pendingOpenIdCallback
+        onDispose { callback?.close() }
+    }
     LaunchedEffect(connected) {
         if (connected && remoteBudgets.isEmpty()) loadBudgets()
         refreshBackups()
