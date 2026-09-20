@@ -21,6 +21,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
@@ -75,11 +76,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -214,6 +218,38 @@ internal fun SyncStatusBanner(modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun BudgetSwitchOverlay() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.45f))
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent().changes.forEach { it.consume() }
+                    }
+                }
+            }
+            .clearAndSetSemantics { contentDescription = "Loading budget" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 6.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                CircularProgressIndicator()
+                Text("Loading budget…", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
+}
+
+@Composable
 fun AppNavigation(
     modifier: Modifier = Modifier,
     foregroundGeneration: Int = 0,
@@ -245,6 +281,8 @@ fun AppNavigation(
         CreditCardDueNotificationScheduler.refresh(context)
     }
     var repositoryVersion by remember { mutableStateOf(0) }
+    var budgetReplacementInProgress by remember { mutableStateOf(false) }
+    var budgetReplacementCompleted by remember { mutableStateOf(false) }
     val favoriteBudgetId = remember(repositoryVersion) { ActiveBudgetStore(context).budgetId ?: "no-budget" }
     val repository = remember(repositoryVersion) { ActuaRepository(context) }
     var dataVersion by remember { mutableStateOf(0) }
@@ -340,6 +378,7 @@ fun AppNavigation(
     var reportSnapshotVersion by remember(repository) { mutableStateOf(-1) }
     var addOrigin by rememberSaveable { mutableStateOf(MainDestination.Accounts) }
     var transactionFabExpanded by rememberSaveable { mutableStateOf(true) }
+    var transactionsRefreshing by remember { mutableStateOf(false) }
     var reconcileOpen by remember { mutableStateOf(false) }
     var scheduleReturnsToBills by rememberSaveable { mutableStateOf(false) }
     var scheduleReturnsToTransactions by rememberSaveable { mutableStateOf(false) }
@@ -407,6 +446,30 @@ fun AppNavigation(
             false
         },
     )
+    }
+
+    fun refreshTransactions() {
+        if (transactionsRefreshing) return
+        transactionsRefreshing = true
+        coroutineScope.launch {
+            try {
+                when (withContext(Dispatchers.IO) {
+                    ActualSyncRunner.run(context, trigger = "Pull to refresh")
+                }) {
+                    is SyncRunResult.Success -> Unit
+                    SyncRunResult.NotConfigured -> dataVersion += 1
+                    SyncRunResult.EncryptionKeyUnavailable -> {
+                        errorMessage = "Unlock this encrypted budget before syncing."
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                errorMessage = error.message?.takeIf(String::isNotBlank) ?: "Sync failed."
+            } finally {
+                transactionsRefreshing = false
+            }
+        }
     }
 
     // Same contract as [mutate], but the (disk I/O) mutation runs off the main thread and
@@ -499,6 +562,16 @@ fun AppNavigation(
 
     LaunchedEffect(syncDataGeneration) {
         if (syncDataGeneration > 0) dataVersion += 1
+    }
+
+    LaunchedEffect(budgetReplacementCompleted) {
+        if (budgetReplacementCompleted) {
+            // repositoryVersion has already rebuilt the repository and all screen projections.
+            // Keep the blocker through the first frame that can display those new values.
+            withFrameNanos { }
+            budgetReplacementInProgress = false
+            budgetReplacementCompleted = false
+        }
     }
 
     LaunchedEffect(destination) {
@@ -663,8 +736,11 @@ fun AppNavigation(
         }
     }
 
+    BackHandler(enabled = budgetReplacementInProgress) { }
+
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (shouldShowSyncBanner(syncStatus) && repository.isUsingActualBudget) {
@@ -937,6 +1013,8 @@ fun AppNavigation(
                 },
                 showNotes = showNotes,
                 onReconcileVisibilityChange = { reconcileOpen = it },
+                isRefreshing = transactionsRefreshing,
+                onRefresh = ::refreshTransactions,
             )
             DetailDestination.EditTransaction -> {
             // Otherwise these are rebuilt from the whole account/payee lists on every
@@ -1198,10 +1276,17 @@ fun AppNavigation(
             )
             DetailDestination.Connection -> ConnectionScreen(
                 onBack = { detail = DetailDestination.Main },
-                onBeforeBudgetReplacement = { repository.close() },
+                onBeforeBudgetReplacement = {
+                    if (!budgetReplacementInProgress) {
+                        budgetReplacementInProgress = true
+                        budgetReplacementCompleted = false
+                        repository.close()
+                    }
+                },
                 onBudgetInstalled = {
                     repositoryVersion += 1
                     dataVersion += 1
+                    if (budgetReplacementInProgress) budgetReplacementCompleted = true
                     CreditCardDueNotificationScheduler.refresh(context)
                 },
                 modifier = contentModifier,
@@ -1888,6 +1973,8 @@ fun AppNavigation(
                     linkableSchedules = linkableSchedules,
                     showBackButton = false,
                     returnToRootRequest = rootRequests[MainDestination.Transactions] ?: 0,
+                    isRefreshing = transactionsRefreshing,
+                    onRefresh = ::refreshTransactions,
                 )
                 MainDestination.Manage -> SettingsScreen(
                     modifier = contentModifier,
@@ -2011,6 +2098,8 @@ fun AppNavigation(
         }
         }
         }
+    }
+    if (budgetReplacementInProgress) BudgetSwitchOverlay()
     }
 }
 
