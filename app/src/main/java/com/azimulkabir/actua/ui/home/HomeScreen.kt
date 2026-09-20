@@ -38,6 +38,7 @@ import com.azimulkabir.actua.data.schedules.ScheduleStatus
 import com.azimulkabir.actua.model.Account
 import com.azimulkabir.actua.model.BudgetCategory
 import com.azimulkabir.actua.model.BudgetOverview
+import com.azimulkabir.actua.model.ReportDashboardPage
 import com.azimulkabir.actua.model.Transaction
 import com.azimulkabir.actua.ui.components.ActuaScreenHeader
 import com.azimulkabir.actua.ui.components.ActuaSectionHeader
@@ -63,6 +64,7 @@ fun HomeScreen(
     onSchedulesClick: () -> Unit = {},
     onTransactionsClick: () -> Unit = {},
     onReportsClick: () -> Unit = {},
+    onReportClick: (String) -> Unit = {},
     onCustomizeClick: () -> Unit = {},
     returnToRootRequest: Int = 0,
 ) {
@@ -88,7 +90,7 @@ fun HomeScreen(
                         HomeSection.FAVORITE_ACCOUNTS -> AccountRows(projection.favoriteAccounts, hideDecimalPlaces, onAccountsClick)
                         HomeSection.UPCOMING -> ScheduleRows(projection.upcomingSchedules, hideDecimalPlaces, onSchedulesClick)
                         HomeSection.THIS_MONTH -> ThisMonthCard(projection.monthTransactions, hideDecimalPlaces, onTransactionsClick)
-                        HomeSection.REPORTS -> HomeDestinationRow(stringResource(R.string.home_dashboards), Icons.Outlined.BarChart, onReportsClick)
+                        HomeSection.REPORTS -> ReportRows(projection.favoriteReports, onReportClick, onReportsClick)
                         HomeSection.RECENT_ACTIVITY -> TransactionRows(projection.recentTransactions, hideDecimalPlaces, onTransactionsClick)
                     }
                 }
@@ -118,6 +120,16 @@ private fun HomeSectionHeader(title: String) = ActuaSectionHeader(title = title)
 @Composable private fun ScheduleRows(schedules: List<ScheduleListItem>, hideDecimals: Boolean, onClick: () -> Unit) {
     val visible = schedules.filter { it.status !in setOf(ScheduleStatus.COMPLETED, ScheduleStatus.PAID) }.take(5)
     if (visible.isEmpty()) HomeEmptyRow(stringResource(R.string.home_no_upcoming), onClick) else visible.forEach { HomeValueRow(it.title, scheduleLabel(it), it.schedule.postAmount, hideDecimals, onClick) }
+}
+@Composable private fun ReportRows(reports: List<ReportDashboardPage>, onReportClick: (String) -> Unit, onViewAllClick: () -> Unit) {
+    if (reports.isEmpty()) {
+        HomeDestinationRow(stringResource(R.string.home_dashboards), Icons.Outlined.BarChart, onViewAllClick)
+    } else {
+        reports.take(5).forEach { report ->
+            HomeDestinationRow(report.name, Icons.Outlined.BarChart) { onReportClick(report.id) }
+        }
+        HomeDestinationRow(stringResource(R.string.home_view_all_reports), Icons.Outlined.BarChart, onViewAllClick)
+    }
 }
 @Composable private fun ThisMonthCard(transactions: List<Transaction>, hideDecimals: Boolean, onClick: () -> Unit) {
     var income = 0L

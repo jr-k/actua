@@ -342,6 +342,7 @@
     <string name="home_no_upcoming">Aucune facture ni échéance à venir</string>
     <string name="home_available">Disponible</string>
     <string name="home_dashboards">Tableaux de bord et analyses financières</string>
+    <string name="home_view_all_reports">Voir tous les rapports</string>
     <string name="home_income">Revenus</string>
     <string name="home_spent">Dépensé</string>
     <string name="home_activity">Activité</string>

@@ -342,6 +342,7 @@
     <string name="home_no_upcoming">No upcoming bills or schedules</string>
     <string name="home_available">Available</string>
     <string name="home_dashboards">Dashboards and financial insights</string>
+    <string name="home_view_all_reports">View all reports</string>
     <string name="home_income">Income</string>
     <string name="home_spent">Spent</string>
     <string name="home_activity">Activity</string>

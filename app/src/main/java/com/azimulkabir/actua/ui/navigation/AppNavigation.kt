@@ -414,6 +414,8 @@ fun AppNavigation(
     var favoriteReportIds by remember(favoriteBudgetId) {
         mutableStateOf(favoritePreferences.ids(favoriteBudgetId, FavoritePreferences.Type.REPORT))
     }
+    var requestedReportPageId by remember { mutableStateOf<String?>(null) }
+    var requestedReportPageRequest by remember { mutableStateOf(0) }
     var hideBalances by remember { mutableStateOf(displayPreferences.hideBalances) }
     var appearance by remember { mutableStateOf(displayPreferences.appearance) }
     var useDynamicColor by remember { mutableStateOf(displayPreferences.useDynamicColor) }
@@ -608,10 +610,19 @@ fun AppNavigation(
         if (tabSwitchJob?.isActive != true) selectedTab = destination
     }
 
+    LaunchedEffect(detail) {
+        // Otherwise a later plain visit to Reports (bottom tab, Manage) would replay this stale
+        // request and force the view back to whatever favorite was last opened from Home.
+        if (detail != DetailDestination.Reports) {
+            requestedReportPageId = null
+            requestedReportPageRequest = 0
+        }
+    }
+
     LaunchedEffect(destination, detail, dataVersion, repository) {
-        if (detail == DetailDestination.Reports &&
-            reportSnapshotVersion != dataVersion
-        ) {
+        val needsReportSnapshot = detail == DetailDestination.Reports ||
+            (destination == MainDestination.Home && detail == DetailDestination.Main)
+        if (needsReportSnapshot && reportSnapshotVersion != dataVersion) {
             try {
                 val loaded = withContext(Dispatchers.IO) { repository.reports() }
                 reportSnapshot = loaded
@@ -779,6 +790,7 @@ fun AppNavigation(
         },
         floatingActionButton = {
             val onMainTab = detail == DetailDestination.Main && destination in setOf(
+                MainDestination.Home,
                 MainDestination.Budget,
                 MainDestination.Accounts,
                 MainDestination.Transactions,
@@ -932,6 +944,8 @@ fun AppNavigation(
                     favoriteReportIds = favoritePreferences.ids(favoriteBudgetId, FavoritePreferences.Type.REPORT)
                 },
                 scrollToTopRequest = 0,
+                initialPageId = requestedReportPageId,
+                initialPageRequest = requestedReportPageRequest,
             )
             DetailDestination.Transactions -> TransactionsScreen(
                 accountName = transactionAccount,
@@ -1673,16 +1687,20 @@ fun AppNavigation(
                         dataVersion,
                         favoriteCategoryIds,
                         favoriteAccountIds,
+                        favoriteReportIds,
+                        reportSnapshot,
                         budgetMonth,
                     ) {
                         HomeDashboardProjection.from(
                             budgetOverview = budgetOverview,
                             budgetGroups = budgetGroups,
                             accounts = accounts,
+                            reportDashboards = reportSnapshot?.dashboards.orEmpty(),
                             schedules = schedules,
                             transactions = transactions,
                             favoriteCategoryIds = favoriteCategoryIds,
                             favoriteAccountIds = favoriteAccountIds,
+                            favoriteReportIds = favoriteReportIds,
                             month = budgetMonth,
                         )
                     },
@@ -1696,6 +1714,11 @@ fun AppNavigation(
                     },
                     onTransactionsClick = { destination = MainDestination.Transactions },
                     onReportsClick = { detail = DetailDestination.Reports },
+                    onReportClick = { id ->
+                        requestedReportPageId = id
+                        requestedReportPageRequest += 1
+                        detail = DetailDestination.Reports
+                    },
                     onCustomizeClick = { detail = DetailDestination.CustomizeHome },
                     returnToRootRequest = rootRequests[MainDestination.Home] ?: 0,
                 )
