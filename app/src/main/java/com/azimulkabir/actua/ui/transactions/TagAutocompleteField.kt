@@ -25,11 +25,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.azimulkabir.actua.data.budget.model.ActualTag
+import com.azimulkabir.actua.R
 
 @Composable
 internal fun TagAutocompleteField(
@@ -37,7 +39,7 @@ internal fun TagAutocompleteField(
     tags: List<ActualTag>,
     onValueChange: (String) -> Unit,
     onCreateTag: (String) -> ActualTag?,
-    label: String = "Notes",
+    label: String? = null,
     modifier: Modifier = Modifier,
 ) {
     var fieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
@@ -58,7 +60,7 @@ internal fun TagAutocompleteField(
         OutlinedTextField(
             value = fieldValue,
             onValueChange = { next -> fieldValue = next; onValueChange(next.text) },
-            label = { Text(label) },
+            label = { Text(label ?: stringResource(R.string.transaction_notes)) },
             singleLine = true,
             trailingIcon = {
                 IconButton(onClick = {
@@ -91,7 +93,9 @@ internal fun TagAutocompleteField(
                     },
                 )
             }
-            if (showCreate && token != null) DropdownMenuItem(text = { Text("Create #${token.name}") }, onClick = {
+            if (showCreate && token != null) DropdownMenuItem(text = {
+                Text(stringResource(R.string.transaction_create_tag, token.name))
+            }, onClick = {
                 val current = activeTagToken(fieldValue.text, fieldValue.selection.end) ?: return@DropdownMenuItem
                 val created = onCreateTag(current.name) ?: return@DropdownMenuItem
                 val (text, cursor) = replaceActiveTag(fieldValue.text, current, created.tag)

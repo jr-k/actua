@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +46,7 @@ import com.azimulkabir.actua.data.budget.model.ActualCategoryGroup
 import com.azimulkabir.actua.ui.components.ActuaScreenHeader
 import com.azimulkabir.actua.ui.components.dragReorderHandle
 import kotlinx.coroutines.launch
+import com.azimulkabir.actua.R
 
 private const val ROW_HEIGHT_DP = 56
 private const val EDGE_SCROLL_ZONE_PX = 100f
@@ -124,9 +126,9 @@ fun ReorderGroupsScreen(
     val reorderable = remember(localGroups) { localGroups.filterNot { it.isIncome } }
 
     Column(modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Reorder Groups", onBack = onBack)
+        ActuaScreenHeader(title = stringResource(R.string.categories_reorder_groups), onBack = onBack)
         Text(
-            "Drag a handle to reorder, or use the up/down arrows.",
+            stringResource(R.string.categories_reorder_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -169,11 +171,14 @@ private fun GroupReorderRow(
     canMoveUp: Boolean,
     canMoveDown: Boolean,
 ) {
+    val displayName = group.name.ifBlank { stringResource(R.string.common_unknown) }
+    val moveUpDescription = stringResource(R.string.categories_move_named_group_up, displayName)
+    val moveDownDescription = stringResource(R.string.categories_move_named_group_down, displayName)
     Row(modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (!group.isIncome) {
             Icon(
                 Icons.Outlined.DragHandle,
-                contentDescription = "Drag to reorder ${group.name} group",
+                contentDescription = stringResource(R.string.categories_drag_group, displayName),
                 modifier = Modifier
                     .size(44.dp)
                     .padding(8.dp)
@@ -188,23 +193,23 @@ private fun GroupReorderRow(
             Box(Modifier.size(44.dp))
         }
         Text(
-            group.name,
+            displayName,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(start = 8.dp),
         )
-        if (group.hidden) Icon(Icons.Outlined.VisibilityOff, "Hidden group", modifier = Modifier.size(18.dp).padding(end = 8.dp))
+        if (group.hidden) Icon(Icons.Outlined.VisibilityOff, stringResource(R.string.categories_hidden_group), modifier = Modifier.size(18.dp).padding(end = 8.dp))
         if (!group.isIncome) {
             IconButton(
                 onClick = onMoveUp,
                 enabled = canMoveUp,
-                modifier = Modifier.semantics { contentDescription = "Move ${group.name} group up" },
+                modifier = Modifier.semantics { contentDescription = moveUpDescription },
             ) { Icon(Icons.Outlined.KeyboardArrowUp, null) }
             IconButton(
                 onClick = onMoveDown,
                 enabled = canMoveDown,
-                modifier = Modifier.semantics { contentDescription = "Move ${group.name} group down" },
+                modifier = Modifier.semantics { contentDescription = moveDownDescription },
             ) { Icon(Icons.Outlined.KeyboardArrowDown, null) }
         }
     }

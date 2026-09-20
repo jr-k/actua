@@ -9,6 +9,7 @@
     android:paddingVertical="12dp">
 
     <TextView
+        android:id="@+id/widget_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/widget_budget_snapshot"
@@ -32,6 +33,7 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
+            android:id="@+id/widget_ready_label"
             style="@style/WidgetLabel"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -46,6 +48,7 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
+            android:id="@+id/widget_budgeted_label"
             style="@style/WidgetLabel"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -60,6 +63,7 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
+            android:id="@+id/widget_balance_label"
             style="@style/WidgetLabel"
             android:layout_width="0dp"
             android:layout_weight="1"

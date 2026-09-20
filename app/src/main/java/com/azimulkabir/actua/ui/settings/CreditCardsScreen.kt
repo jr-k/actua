@@ -34,8 +34,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.model.Account
 import com.azimulkabir.actua.model.CreditCardCycle
 import com.azimulkabir.actua.model.CreditCardStatus
@@ -64,9 +67,9 @@ fun CreditCardsScreen(
     val availableAccounts = accounts.filter { !it.closed && it.id !in configured }
 
     Column(modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Credit Cards", onBack = onBack) {
+        ActuaScreenHeader(title = stringResource(R.string.fs_credit_cards), onBack = onBack) {
             IconButton(onClick = { adding = true }, enabled = availableAccounts.isNotEmpty()) {
-                Icon(Icons.Outlined.Add, "Add credit card")
+                Icon(Icons.Outlined.Add, stringResource(R.string.fs_add_credit_card))
             }
         }
         LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -76,8 +79,8 @@ fun CreditCardsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Payment reminders", fontWeight = FontWeight.SemiBold)
-                        Text("Notify 7, 5, 3 and 1 days before an unpaid card is due.",
+                        Text(stringResource(R.string.fs_payment_reminders), fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.fs_payment_reminders_description),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -85,7 +88,7 @@ fun CreditCardsScreen(
                 }
             }
             if (cards.isEmpty()) item {
-                Text("Mark an account as a credit card to track its billing cycle, cycle spend, payment due date and available credit.",
+                Text(stringResource(R.string.fs_no_credit_cards),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(20.dp))
             }
@@ -119,23 +122,31 @@ private fun CreditCardRow(
             }
             Column(Modifier.padding(12.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth()) {
-                    Text(card.accountName, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text(card.accountName.ifBlank { stringResource(R.string.fs_unknown_account) },
+                        fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     Text(formatMoneyCents(card.balanceCents, hideDecimals), fontWeight = FontWeight.SemiBold)
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Spend ${formatMoneyCents(card.cycleSpendCents, hideDecimals)} · ${card.cycle.daysRemainingInCycle()}d left",
+                    val daysRemaining = card.cycle.daysRemainingInCycle()
+                    Text(pluralStringResource(R.plurals.fs_card_spend_days_left, daysRemaining,
+                        formatMoneyCents(card.cycleSpendCents, hideDecimals), daysRemaining),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f))
-                    Text(card.cycle.dueShortSummary(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
+                    val daysUntilDue = card.cycle.daysUntilDue()
+                    Text(when (daysUntilDue) {
+                        0 -> stringResource(R.string.fs_due_today)
+                        1 -> stringResource(R.string.fs_due_tomorrow)
+                        else -> pluralStringResource(R.plurals.fs_due_in_days, daysUntilDue, daysUntilDue)
+                    }, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(start = 8.dp))
                 }
                 card.availableCreditCents?.let {
-                    Text("Available credit ${formatMoneyCents(it, hideDecimals)}", style = MaterialTheme.typography.bodySmall,
+                    Text(stringResource(R.string.fs_available_credit, formatMoneyCents(it, hideDecimals)), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             IconButton(onClick = onViewStatements) {
-                Icon(Icons.Outlined.History, "View recent statements")
+                Icon(Icons.Outlined.History, stringResource(R.string.fs_view_recent_statements))
             }
         }
     }
@@ -160,49 +171,55 @@ private fun CardEditorDialog(
     val limitCents = runCatching { limit.takeIf(String::isNotBlank)?.let {
         BigDecimal(it).movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact().takeIf { cents -> cents > 0 }
     } }.getOrNull()
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (card == null) "Add Credit Card" else "Edit Card") }, text = {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(if (card == null) R.string.fs_add_credit_card_title else R.string.fs_edit_card)) }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (card == null) Box {
                 TextButton(onClick = { accountsExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(account?.name ?: "Select account")
+                    Text(account?.name?.ifBlank { stringResource(R.string.fs_unknown_account) }
+                        ?: stringResource(R.string.fs_select_account))
                 }
                 DropdownMenu(accountsExpanded, { accountsExpanded = false }) { accounts.forEach { option ->
-                    DropdownMenuItem(text = { Text(option.name) }, onClick = { accountId = option.id; accountsExpanded = false })
+                    DropdownMenuItem(
+                        text = { Text(option.name.ifBlank { stringResource(R.string.fs_unknown_account) }) },
+                        onClick = { accountId = option.id; accountsExpanded = false },
+                    )
                 } }
-            } else Text("Account  ${card.accountName}")
-            OutlinedTextField(day, { day = it.filter(Char::isDigit).take(2) }, label = { Text("Statement closing day (1–31)") }, singleLine = true)
+            } else Text(stringResource(
+                R.string.fs_account_named,
+                card.accountName.ifBlank { stringResource(R.string.fs_unknown_account) },
+            ))
+            OutlinedTextField(day, { day = it.filter(Char::isDigit).take(2) }, label = { Text(stringResource(R.string.fs_statement_closing_day)) }, singleLine = true)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = !useFixedDueDay,
                     onClick = { useFixedDueDay = false },
-                    label = { Text("Days after") },
+                    label = { Text(stringResource(R.string.fs_days_after)) },
                     modifier = Modifier.weight(1f),
                 )
                 FilterChip(
                     selected = useFixedDueDay,
                     onClick = { useFixedDueDay = true },
-                    label = { Text("Day of month") },
+                    label = { Text(stringResource(R.string.fs_day_of_month)) },
                     modifier = Modifier.weight(1f),
                 )
             }
             if (useFixedDueDay) {
-                OutlinedTextField(dueDay, { dueDay = it.filter(Char::isDigit).take(2) }, label = { Text("Payment due day (1–31)") }, singleLine = true)
+                OutlinedTextField(dueDay, { dueDay = it.filter(Char::isDigit).take(2) }, label = { Text(stringResource(R.string.fs_payment_due_day)) }, singleLine = true)
             } else {
-                OutlinedTextField(offset, { offset = it.filter(Char::isDigit).take(2) }, label = { Text("Payment due after (1–60 days)") }, singleLine = true)
+                OutlinedTextField(offset, { offset = it.filter(Char::isDigit).take(2) }, label = { Text(stringResource(R.string.fs_payment_due_after)) }, singleLine = true)
             }
-            OutlinedTextField(limit, { value -> limit = value.filter { it.isDigit() || it == '.' } }, label = { Text("Credit limit (optional)") }, singleLine = true)
-            Text(if (useFixedDueDay) "The due date uses the issuer’s fixed calendar day, clamped for shorter months."
-                else "The due date is the statement closing date plus the issuer’s payment period.",
+            OutlinedTextField(limit, { value -> limit = value.filter { it.isDigit() || it == '.' } }, label = { Text(stringResource(R.string.fs_credit_limit_optional)) }, singleLine = true)
+            Text(stringResource(if (useFixedDueDay) R.string.fs_fixed_due_explanation else R.string.fs_offset_due_explanation),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (onRemove != null) TextButton(onClick = onRemove) { Text("Remove Credit Card Tracking", color = MaterialTheme.colorScheme.error) }
+            if (onRemove != null) TextButton(onClick = onRemove) { Text(stringResource(R.string.fs_remove_credit_card_tracking), color = MaterialTheme.colorScheme.error) }
         }
-    }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }, confirmButton = {
+    }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.fs_cancel)) } }, confirmButton = {
         val validPaymentDue = if (useFixedDueDay) validDueDay != null else validOffset != null
         Button(enabled = accountId.isNotBlank() && validDay != null && validPaymentDue && (limit.isBlank() || limitCents != null),
             onClick = {
                 val paymentDue = if (useFixedDueDay) CreditCardCycle.PaymentDue.DayOfMonth(validDueDay!!)
                 else CreditCardCycle.PaymentDue.DaysAfter(validOffset!!)
                 onSave(accountId, validDay!!, paymentDue, limitCents)
-            }) { Text("Save") }
+            }) { Text(stringResource(R.string.fs_save)) }
     })
 }

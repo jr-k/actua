@@ -156,7 +156,7 @@ class ActuaRepository(context: Context) {
         ?: emptyList()
 
     fun payeeNames(): List<String> = actualDatabase?.fetchPayees()
-        ?.filter { it.transferAccountId == null && it.name != "Unknown" }
+        ?.filter { it.transferAccountId == null && it.name.isNotBlank() }
         ?.map { it.name }
         ?: emptyList()
 
@@ -167,7 +167,7 @@ class ActuaRepository(context: Context) {
         val database = actualDatabase ?: return emptyList()
         val names = database.fetchPayees().associate { it.id to it.name }
         return database.fetchPayeeLocations().mapNotNull { location ->
-            val name = names[location.payeeId]?.takeIf { it.isNotBlank() && it != "Unknown" }
+            val name = names[location.payeeId]?.takeIf(String::isNotBlank)
                 ?: return@mapNotNull null
             PayeeLocationSummary(
                 id = location.id,
@@ -198,7 +198,7 @@ class ActuaRepository(context: Context) {
     fun nearbyPayees(coordinates: Coordinates): List<NearbyPayeeSummary> =
         actualDatabase?.fetchNearbyPayees(coordinates)
             ?.mapNotNull { nearby ->
-                nearby.payee.name.takeIf { it.isNotBlank() && it != "Unknown" }?.let { name ->
+                nearby.payee.name.takeIf(String::isNotBlank)?.let { name ->
                     NearbyPayeeSummary(
                         locationId = nearby.location.id,
                         payeeName = name,
@@ -240,8 +240,8 @@ class ActuaRepository(context: Context) {
             ScheduleLinkedTransaction(
                 id = transaction.id,
                 date = DayDate.fromYyyymmdd(transaction.date),
-                payeeName = transaction.payeeName ?: if (transaction.isParent) "Split" else "No payee",
-                accountName = accounts[transaction.accountId] ?: "Unknown account",
+                payeeName = transaction.payeeName.orEmpty(),
+                accountName = accounts[transaction.accountId].orEmpty(),
                 amountCents = transaction.amountCents,
             )
         }
@@ -254,8 +254,8 @@ class ActuaRepository(context: Context) {
         return database.discoverSchedules().map { proposal ->
             ScheduleDiscovery.DisplayProposal(
                 proposal = proposal,
-                payeeName = payees[proposal.payeeId] ?: "Unknown payee",
-                accountName = accounts[proposal.accountId] ?: "Unknown account",
+                payeeName = payees[proposal.payeeId].orEmpty(),
+                accountName = accounts[proposal.accountId].orEmpty(),
             )
         }
     }
@@ -420,14 +420,14 @@ class ActuaRepository(context: Context) {
         val accountNames = allAccounts.associate { it.id to it.name }
         val allNames = (allAccounts.map { it.id to it.name } + allPayees.map { payee ->
             val name = payee.name.takeIf { it.isNotBlank() }
-                ?: payee.transferAccountId?.let(accountNames::get)?.let { "Transfer: $it" }
-                ?: "Unknown payee"
+                ?: payee.transferAccountId?.let(accountNames::get)
+                ?: ""
             payee.id to name
         } +
             allCategories.map { it.id to it.name } + groups.map { it.id to it.name }).toMap()
         return RuleEditorData(
             accounts = allAccounts.filterNot { it.closed }.map { RuleChoice(it.id, it.name) },
-            payees = allPayees.filter { it.transferAccountId == null && it.name.isNotBlank() && it.name != "Unknown" }
+            payees = allPayees.filter { it.transferAccountId == null && it.name.isNotBlank() }
                 .map { RuleChoice(it.id, it.name) },
             categories = groups.filterNot { it.hidden }.flatMap { it.categories }.filterNot { it.hidden }
                 .map { RuleChoice(it.id, it.name) },
@@ -665,13 +665,12 @@ class ActuaRepository(context: Context) {
         return Transaction(
             id = it.id,
             date = it.date.toString(),
-            payee = it.payeeName ?: if (it.isParent) "Split" else "",
+            payee = it.payeeName.orEmpty(),
             category = when {
                 isTransfer -> ""
-                it.isParent -> "Split"
-                else -> it.categoryName ?: "Uncategorized"
+                else -> it.categoryName.orEmpty()
             },
-            account = accountNames[it.accountId] ?: "Unknown",
+            account = accountNames[it.accountId].orEmpty(),
             amount = centsToDisplayUnits(it.amountCents),
             cleared = it.cleared,
             reconciled = it.reconciled,
@@ -818,7 +817,7 @@ class ActuaRepository(context: Context) {
             val categories = db.fetchCategoryGroups().flatMap { it.categories }
             val category = categories.firstOrNull { it.name == transaction.category && !it.hidden }
             if (categoriesAllowed && transaction.splits.isEmpty() && transaction.category.isNotBlank() &&
-                transaction.category != "Uncategorized" && category == null) {
+                category == null) {
                 error("Select a category from the list")
             }
             val transferAccount = transaction.transferAccount?.let { name ->

@@ -12,6 +12,11 @@ data class BudgetAutomationDocument(
     val hasUnsupported: Boolean get() = unsupportedTypes.isNotEmpty() || !editable
 
     companion object {
+        const val UNSUPPORTED_UNKNOWN = "unknown"
+        const val UNSUPPORTED_INVALID_DEFINITION = "invalid definition"
+        const val UNSUPPORTED_BY_PRIORITIES = "by priorities"
+        const val UNSUPPORTED_INVALID_SUPPORTED_DEFINITION = "invalid supported definition"
+
         fun decode(
             raw: String?,
             source: String?,
@@ -19,15 +24,15 @@ data class BudgetAutomationDocument(
         ): BudgetAutomationDocument {
             if (raw.isNullOrBlank()) return BudgetAutomationDocument(emptyList())
             val array = runCatching { JSONArray(raw) }.getOrNull()
-                ?: return BudgetAutomationDocument(emptyList(), listOf("invalid definition"), source == "ui")
+                ?: return BudgetAutomationDocument(emptyList(), listOf(UNSUPPORTED_INVALID_DEFINITION), source == "ui")
             val rows = (0 until array.length()).mapNotNull(array::optJSONObject)
             if (rows.size != array.length()) {
-                return BudgetAutomationDocument(emptyList(), listOf("invalid definition"), false)
+                return BudgetAutomationDocument(emptyList(), listOf(UNSUPPORTED_INVALID_DEFINITION), false)
             }
             val supported = mutableListOf<BudgetTarget>()
             val unsupported = mutableListOf<String>()
             rows.forEach { row ->
-                val type = row.optString("type").ifBlank { "unknown" }
+                val type = row.optString("type").ifBlank { UNSUPPORTED_UNKNOWN }
                 val target = BudgetTarget.fromGoalDef(
                     JSONArray().put(JSONObject(row.toString())).toString(),
                     "ui",
@@ -36,9 +41,9 @@ data class BudgetAutomationDocument(
                 if (target == null) unsupported += type else supported += target
             }
             if (supported.filter { it.type == BudgetTarget.Type.BY_DATE }.map(BudgetTarget::priority).distinct().size > 1) {
-                unsupported += "by priorities"
+                unsupported += UNSUPPORTED_BY_PRIORITIES
             }
-            if (validate(supported).isNotEmpty()) unsupported += "invalid supported definition"
+            if (validate(supported).isNotEmpty()) unsupported += UNSUPPORTED_INVALID_SUPPORTED_DEFINITION
             return BudgetAutomationDocument(supported, unsupported.distinct(), editable = source == "ui")
         }
 

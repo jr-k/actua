@@ -20,6 +20,29 @@ import kotlin.math.roundToLong
 
 /** Core Actual dashboard widgets, ported from Actuali's report engines. */
 object CoreReportEngine {
+    object DisplayToken {
+        const val DASHBOARD = "actua.report.dashboard"
+        const val UNTITLED = "actua.report.untitled"
+        const val SUMMARY = "actua.report.summary"
+        const val NET_WORTH = "actua.report.net-worth"
+        const val CASH_FLOW = "actua.report.cash-flow"
+        const val SPENDING = "actua.report.spending"
+        const val NOTES = "actua.report.notes"
+        const val AGE_OF_MONEY = "actua.report.age-of-money"
+        const val FORMULA = "actua.report.formula"
+        const val CUSTOM_REPORT = "actua.report.custom"
+        const val CALENDAR = "actua.report.calendar"
+        const val CROSSOVER = "actua.report.crossover"
+        const val BUDGET_ANALYSIS = "actua.report.budget-analysis"
+        const val SANKEY = "actua.report.sankey"
+        const val BALANCE_FORECAST = "actua.report.balance-forecast"
+        const val MONTE_CARLO = "actua.report.monte-carlo"
+        const val UNSUPPORTED_REPORT = "actua.report.unsupported"
+        const val UNCATEGORIZED = "actua.report.uncategorized"
+        const val OTHER = "actua.report.other"
+        const val FORMULA_UNSUPPORTED = "actua.report.formula-unsupported"
+    }
+
     fun dashboards(
         pages: List<DashboardPageRow>,
         widgets: (String?) -> List<DashboardWidgetRow>,
@@ -29,7 +52,7 @@ object CoreReportEngine {
         budgetedByCategory: (YearMonth) -> Map<String, Long> = { emptyMap() },
         today: LocalDate = LocalDate.now(),
     ): List<ReportDashboardPage> {
-        val resolvedPages = if (pages.isEmpty()) listOf(DashboardPageRow("", "Dashboard")) else pages
+        val resolvedPages = if (pages.isEmpty()) listOf(DashboardPageRow("", DisplayToken.DASHBOARD)) else pages
         val context = RuleContext(
             offBudgetAccountIds = accounts.filter { it.offBudget }.mapTo(mutableSetOf()) { it.id },
             accountNames = accounts.associate { it.id to it.name },
@@ -42,7 +65,7 @@ object CoreReportEngine {
         return resolvedPages.map { page ->
             ReportDashboardPage(
                 page.id,
-                page.name.ifBlank { "Untitled" },
+                page.name.ifBlank { DisplayToken.UNTITLED },
                 widgets(page.id.ifBlank { null }).map { row ->
                     compute(
                         row, transactions, context, incomeCategories, budgetedByCategory, today,
@@ -154,7 +177,7 @@ object CoreReportEngine {
             }
         val value = ArithmeticParser(expression).parse()?.times(100)?.roundToLong()
         return ReportWidget(id, ReportWidgetKind.FORMULA, name, valueCents = value,
-            markdown = if (value == null) "This formula uses functions Actua cannot evaluate." else null)
+            markdown = if (value == null) DisplayToken.FORMULA_UNSUPPORTED else null)
     }
 
     private fun customReport(
@@ -164,7 +187,7 @@ object CoreReportEngine {
         val expenses = transactions.filter { it.amountCents < 0 && it.transferAccountId == null &&
             it.accountId !in context.offBudgetAccountIds && it.categoryId !in incomeCategoryIds }
         val categories = expenses.groupBy {
-            it.categoryId?.let(context.categoryNames::get).orEmpty().ifBlank { "Uncategorized" }
+            it.categoryId?.let(context.categoryNames::get).orEmpty().ifBlank { DisplayToken.UNCATEGORIZED }
         }
             .map { (label, rows) -> com.azimulkabir.actua.model.ReportCategory(label, -rows.sumOf { it.amountCents }) }
             .sortedByDescending { it.spentCents }
@@ -240,7 +263,7 @@ object CoreReportEngine {
             it.accountId !in context.offBudgetAccountIds && it.categoryId !in incomeCategoryIds }
             .groupBy {
                 it.categoryId?.let(context.categoryGroupIds::get)?.let(context.categoryGroupNames::get)
-                    .orEmpty().ifBlank { "Other" }
+                    .orEmpty().ifBlank { DisplayToken.OTHER }
             }
             .map { (label, rows) -> com.azimulkabir.actua.model.ReportCategory(label, -rows.sumOf { it.amountCents }) }
             .sortedByDescending { it.spentCents }
@@ -559,11 +582,20 @@ object CoreReportEngine {
     }
 
     private fun label(type: String) = when (type) {
-        "summary-card" -> "Summary"; "net-worth-card" -> "Net Worth"; "cash-flow-card" -> "Cash Flow"
-        "spending-card" -> "Spending"; "markdown-card" -> "Notes"; "age-of-money-card" -> "Age of Money"
-        "formula-card" -> "Formula"; "custom-report" -> "Custom Report"; "calendar-card" -> "Calendar"
-        "crossover-card" -> "Crossover"; "budget-analysis-card" -> "Budget Analysis"; "sankey-card" -> "Sankey"
-        "balance-forecast-card" -> "Balance Forecast"; "monte-carlo-card" -> "Monte Carlo"
-        else -> type.ifBlank { "Unsupported report" }
+        "summary-card" -> DisplayToken.SUMMARY
+        "net-worth-card" -> DisplayToken.NET_WORTH
+        "cash-flow-card" -> DisplayToken.CASH_FLOW
+        "spending-card" -> DisplayToken.SPENDING
+        "markdown-card" -> DisplayToken.NOTES
+        "age-of-money-card" -> DisplayToken.AGE_OF_MONEY
+        "formula-card" -> DisplayToken.FORMULA
+        "custom-report" -> DisplayToken.CUSTOM_REPORT
+        "calendar-card" -> DisplayToken.CALENDAR
+        "crossover-card" -> DisplayToken.CROSSOVER
+        "budget-analysis-card" -> DisplayToken.BUDGET_ANALYSIS
+        "sankey-card" -> DisplayToken.SANKEY
+        "balance-forecast-card" -> DisplayToken.BALANCE_FORECAST
+        "monte-carlo-card" -> DisplayToken.MONTE_CARLO
+        else -> DisplayToken.UNSUPPORTED_REPORT
     }
 }

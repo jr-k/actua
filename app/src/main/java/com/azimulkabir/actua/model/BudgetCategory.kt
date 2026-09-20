@@ -1,5 +1,8 @@
 package com.azimulkabir.actua.model
 
+import androidx.annotation.StringRes
+import com.azimulkabir.actua.R
+
 data class BudgetCategory(
     val name: String,
     val assigned: Int,
@@ -84,20 +87,20 @@ data class BudgetCategory(
     }
 }
 
-enum class BudgetProgressState(val label: String) {
-    UNASSIGNED("No money assigned"),
-    FUNDED("Funded"),
-    SPENDING("Partially spent"),
-    SPENT("Fully spent"),
-    OVERSPENT("Overspent"),
+enum class BudgetProgressState(@StringRes val labelRes: Int) {
+    UNASSIGNED(R.string.budget_progress_unassigned),
+    FUNDED(R.string.budget_progress_funded),
+    SPENDING(R.string.budget_progress_partially_spent),
+    SPENT(R.string.budget_progress_fully_spent),
+    OVERSPENT(R.string.budget_progress_overspent),
 }
 
-enum class BudgetCategoryView(val label: String) {
-    ALL("All"),
-    OVERSPENT("Overspent"),
-    UNDERFUNDED("Underfunded"),
-    OVERFUNDED("Overfunded"),
-    MONEY_AVAILABLE("Money Available");
+enum class BudgetCategoryView(val storageValue: String, @StringRes val labelRes: Int) {
+    ALL("All", R.string.budget_filter_all),
+    OVERSPENT("Overspent", R.string.budget_filter_overspent),
+    UNDERFUNDED("Underfunded", R.string.budget_filter_underfunded),
+    OVERFUNDED("Overfunded", R.string.budget_filter_overfunded),
+    MONEY_AVAILABLE("Money Available", R.string.budget_filter_money_available);
 
     fun matches(category: BudgetCategory, schedules: List<BudgetScheduleFunding> = emptyList()): Boolean = when (this) {
         ALL -> true
@@ -114,7 +117,8 @@ enum class BudgetCategoryView(val label: String) {
     }
 
     companion object {
-        fun fromLabel(label: String): BudgetCategoryView = entries.find { it.label == label } ?: ALL
+        fun fromStorageValue(value: String): BudgetCategoryView =
+            entries.find { it.storageValue == value } ?: ALL
     }
 }
 

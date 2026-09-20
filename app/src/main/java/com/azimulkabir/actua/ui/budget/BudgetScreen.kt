@@ -87,6 +87,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.Role
@@ -121,6 +124,7 @@ import com.azimulkabir.actua.ui.theme.warning
 import com.azimulkabir.actua.ui.theme.PillShape
 import com.azimulkabir.actua.ui.theme.Spacing
 import com.azimulkabir.actua.ui.transactions.TransactionDetailsSheet
+import com.azimulkabir.actua.R
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.absoluteValue
@@ -322,7 +326,7 @@ fun BudgetScreen(
             }
         }
 
-        val selectedView = BudgetCategoryView.fromLabel(categoryView)
+        val selectedView = BudgetCategoryView.fromStorageValue(categoryView)
         // Otherwise this filters every group and category on every recomposition of
         // BudgetScreen (e.g. opening/closing any sheet), not just when the budget or these
         // display toggles actually change. Must live outside the LazyColumn content lambda,
@@ -533,11 +537,11 @@ fun BudgetScreen(
             },
         )
     }
-    renamingCategory?.let { (group, category) -> RenameDialog("Rename category", category.name,
+    renamingCategory?.let { (group, category) -> RenameDialog(stringResource(R.string.budget_rename_category), category.name,
         onDismiss = { renamingCategory = null }, onSave = { name ->
             onRenameCategory(group.name, category.name, name); renamingCategory = null
         }) }
-    renamingGroup?.let { group -> RenameDialog("Rename group", group.name,
+    renamingGroup?.let { group -> RenameDialog(stringResource(R.string.budget_rename_group), group.name,
         onDismiss = { renamingGroup = null }, onSave = { name -> onRenameGroup(group.name, name); renamingGroup = null }) }
     fundingCategory?.let { (group, category) ->
         FundingActionsSheet(
@@ -718,7 +722,7 @@ private fun BudgetToolbar(
             ) {
                 Icon(
                     Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = "Choose month",
+                    contentDescription = stringResource(R.string.budget_choose_month),
                     modifier = Modifier.padding(4.dp).size(18.dp),
                 )
             }
@@ -732,16 +736,16 @@ private fun BudgetToolbar(
             ) {
                 Row {
                     IconButton(onClick = onSearch) {
-                        Icon(Icons.Outlined.Search, contentDescription = "Search Actua")
+                        Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.common_search_actua))
                     }
                     IconButton(onClick = onAdd) {
-                        Icon(Icons.Outlined.Add, contentDescription = "Add category")
+                        Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.budget_add_category))
                     }
                     IconButton(onClick = onManageCategories) {
-                        Icon(Icons.AutoMirrored.Outlined.FormatListBulleted, contentDescription = "Manage Categories")
+                        Icon(Icons.AutoMirrored.Outlined.FormatListBulleted, contentDescription = stringResource(R.string.budget_manage_categories))
                     }
                     IconButton(onClick = { onOptionsChange(true) }) {
-                        Icon(Icons.Outlined.MoreVert, contentDescription = "Budget display options")
+                        Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.budget_display_options))
                     }
                 }
             }
@@ -749,28 +753,28 @@ private fun BudgetToolbar(
                 expanded = optionsExpanded,
                 onDismissRequest = { onOptionsChange(false) },
             ) {
-                ToggleMenuItem("Plan view", budgetView == "Plan") {
+                ToggleMenuItem(stringResource(R.string.budget_plan_view), budgetView == "Plan") {
                     onBudgetViewChange(if (it) "Plan" else "Table")
                     onOptionsChange(false)
                 }
                 HorizontalDivider()
-                ToggleMenuItem("Show overview", showOverview, onShowOverviewChange)
+                ToggleMenuItem(stringResource(R.string.budget_show_overview), showOverview, onShowOverviewChange)
                 ToggleMenuItem(
-                    if (budgetView == "Plan") "Show spending details" else "Show spent column",
+                    stringResource(if (budgetView == "Plan") R.string.budget_show_spending_details else R.string.budget_show_spent_column),
                     showSpent,
                     onShowSpentChange,
                 )
-                ToggleMenuItem("Show progress bars", showProgressBars, onShowProgressBarsChange)
-                ToggleMenuItem("Show group totals", showGroupTotals, onShowGroupTotalsChange)
+                ToggleMenuItem(stringResource(R.string.budget_show_progress_bars), showProgressBars, onShowProgressBarsChange)
+                ToggleMenuItem(stringResource(R.string.budget_show_group_totals), showGroupTotals, onShowGroupTotalsChange)
                 HorizontalDivider()
-                ToggleMenuItem("Hide fully spent", hideFullySpent, onHideFullySpentChange)
-                ToggleMenuItem("Show hidden categories and groups", showHidden, onShowHiddenChange)
-                ToggleMenuItem("Show category filters", showCategoryFilters, onShowCategoryFiltersChange)
+                ToggleMenuItem(stringResource(R.string.budget_hide_fully_spent), hideFullySpent, onHideFullySpentChange)
+                ToggleMenuItem(stringResource(R.string.budget_show_hidden), showHidden, onShowHiddenChange)
+                ToggleMenuItem(stringResource(R.string.budget_show_filters), showCategoryFilters, onShowCategoryFiltersChange)
                 HorizontalDivider()
-                DropdownMenuItem(text = { Text("Expand all groups") }, onClick = onExpandAll)
-                DropdownMenuItem(text = { Text("Collapse all groups") }, onClick = onCollapseAll)
+                DropdownMenuItem(text = { Text(stringResource(R.string.budget_expand_all_groups)) }, onClick = onExpandAll)
+                DropdownMenuItem(text = { Text(stringResource(R.string.budget_collapse_all_groups)) }, onClick = onCollapseAll)
                 HorizontalDivider()
-                DropdownMenuItem(text = { Text("Copy last month's budget") }, onClick = onCopyPreviousMonth)
+                DropdownMenuItem(text = { Text(stringResource(R.string.budget_copy_last_month)) }, onClick = onCopyPreviousMonth)
             }
         }
     }
@@ -800,19 +804,19 @@ private fun BudgetCategoryFilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         BudgetCategoryView.entries.forEach { view ->
-            val isSelected = view.label == selected
+            val isSelected = view.storageValue == selected
             FilterChip(
                 selected = isSelected,
                 onClick = {
-                    onSelect(if (view == BudgetCategoryView.ALL || isSelected) BudgetCategoryView.ALL.label else view.label)
+                    onSelect(if (view == BudgetCategoryView.ALL || isSelected) BudgetCategoryView.ALL.storageValue else view.storageValue)
                 },
-                label = { Text(view.label) },
+                label = { Text(stringResource(view.labelRes)) },
             )
         }
         FilterChip(
             selected = favoritesOnly,
             onClick = { onFavoritesOnlyChange(!favoritesOnly) },
-            label = { Text("Favorites") },
+            label = { Text(stringResource(R.string.budget_favorites)) },
             leadingIcon = { Icon(if (favoritesOnly) Icons.Filled.Star else Icons.Outlined.StarBorder, null) },
         )
     }
@@ -839,7 +843,7 @@ private fun BudgetMonthPicker(
         title = {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { displayedYear-- }) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Previous year")
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.budget_previous_year))
                 }
                 Text(
                     displayedYear.toString(),
@@ -849,7 +853,7 @@ private fun BudgetMonthPicker(
                     textAlign = TextAlign.Center,
                 )
                 IconButton(onClick = { displayedYear++ }) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Next year")
+                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = stringResource(R.string.budget_next_year))
                 }
             }
         },
@@ -880,14 +884,20 @@ private fun BudgetMonthPicker(
         confirmButton = {
             TextButton(onClick = {
                 onSelect(java.time.YearMonth.now().toString())
-            }) { Text("Current month") }
+            }) { Text(stringResource(R.string.budget_current_month)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
+@Composable
 private fun formatMonth(month: String): String = java.time.YearMonth.parse(month)
-    .format(java.time.format.DateTimeFormatter.ofPattern("MMM yyyy", java.util.Locale.getDefault()))
+    .format(
+        java.time.format.DateTimeFormatter.ofPattern(
+            "MMM yyyy",
+            LocalConfiguration.current.locales[0],
+        ),
+    )
 
 @Composable
 private fun ToggleMenuItem(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
@@ -921,14 +931,14 @@ private fun PlanBudgetOverview(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    "Ready to Budget",
+                    stringResource(R.string.budget_ready_to_budget),
                     style = MaterialTheme.typography.titleSmall,
                     textAlign = TextAlign.End,
                 )
             }
             if (overview.bufferedCents != 0L) {
                 Text(
-                    "${formatMoneyCents(overview.bufferedCents, hideDecimalPlaces)} held for next month",
+                    stringResource(R.string.budget_held_for_next_month, formatMoneyCents(overview.bufferedCents, hideDecimalPlaces)),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 4.dp),
                 )
@@ -947,6 +957,7 @@ private fun PlanBudgetGroupHeader(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
+    val displayName = budgetDisplayName(group.name)
     val rotation by animateFloatAsState(
         targetValue = if (collapsed) -90f else 0f,
         animationSpec = tween(220),
@@ -963,11 +974,11 @@ private fun PlanBudgetGroupHeader(
         ) {
             Icon(
                 Icons.Outlined.KeyboardArrowDown,
-                contentDescription = if (collapsed) "Expand ${group.name}" else "Collapse ${group.name}",
+                contentDescription = stringResource(if (collapsed) R.string.budget_expand_group else R.string.budget_collapse_group, displayName),
                 modifier = Modifier.width(24.dp).rotate(rotation),
             )
             Text(
-                if (group.hidden) "${group.name} · Hidden" else group.name,
+                if (group.hidden) stringResource(R.string.budget_hidden_name, displayName) else displayName,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -976,10 +987,10 @@ private fun PlanBudgetGroupHeader(
             )
             if (showTotals) {
                 if (collapsed) {
-                    AmountColumn("Budgeted", assigned, Modifier.widthIn(min = 92.dp), hideDecimalPlaces)
+                    AmountColumn(stringResource(R.string.budget_budgeted), assigned, Modifier.widthIn(min = 92.dp), hideDecimalPlaces)
                 }
                 AmountColumn(
-                    "Balance",
+                    stringResource(R.string.budget_balance),
                     available,
                     Modifier.widthIn(min = 92.dp),
                     hideDecimalPlaces,
@@ -1002,6 +1013,7 @@ private fun PlanBudgetCategoryRow(
     onLongClick: () -> Unit,
     scheduleFunding: List<BudgetScheduleFunding> = emptyList(),
 ) {
+    val displayName = budgetDisplayName(category.name)
     Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
         if (showTopDivider) HorizontalDivider(
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -1016,13 +1028,13 @@ private fun PlanBudgetCategoryRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (category.hidden) "${category.name} · Hidden" else category.name,
+                    if (category.hidden) stringResource(R.string.budget_hidden_name, displayName) else displayName,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 category.target?.let {
-                    Text(it.type.label, style = MaterialTheme.typography.labelSmall,
+                    Text(stringResource(it.type.labelRes), style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary, maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
                 }
@@ -1046,7 +1058,7 @@ private fun PlanBudgetCategoryRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Budgeted ${formatMoneyCents(category.assignedCents, hideDecimalPlaces)}",
+                    stringResource(R.string.budget_budgeted_amount, formatMoneyCents(category.assignedCents, hideDecimalPlaces)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 4.dp),
@@ -1057,7 +1069,7 @@ private fun PlanBudgetCategoryRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "Spent ${formatMoneyCents(category.spentCents, hideDecimalPlaces)}",
+                    stringResource(R.string.budget_spent_amount, formatMoneyCents(category.spentCents, hideDecimalPlaces)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 4.dp),
@@ -1077,6 +1089,7 @@ private fun IncomeBudgetGroupHeader(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
+    val displayName = budgetDisplayName(group.name)
     val rotation by animateFloatAsState(
         targetValue = if (collapsed) -90f else 0f,
         animationSpec = tween(220),
@@ -1092,17 +1105,17 @@ private fun IncomeBudgetGroupHeader(
         ) {
             Icon(
                 Icons.Outlined.KeyboardArrowDown,
-                contentDescription = if (collapsed) "Expand ${group.name}" else "Collapse ${group.name}",
+                contentDescription = stringResource(if (collapsed) R.string.budget_expand_group else R.string.budget_collapse_group, displayName),
                 modifier = Modifier.width(24.dp).rotate(rotation),
             )
             Text(
-                if (group.hidden) "${group.name} · Hidden" else group.name,
+                if (group.hidden) stringResource(R.string.budget_hidden_name, displayName) else displayName,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f).padding(start = 4.dp),
             )
             Text(
-                "Received ${formatMoneyCents(received, hideDecimalPlaces)}",
+                stringResource(R.string.budget_received_amount, formatMoneyCents(received, hideDecimalPlaces)),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
                 color = if (received > 0L) MaterialTheme.colorScheme.primary
@@ -1121,6 +1134,7 @@ private fun IncomeBudgetCategoryRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
+    val displayName = budgetDisplayName(category.name)
     if (showTopDivider) HorizontalDivider(
         modifier = Modifier.padding(start = 16.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
@@ -1132,7 +1146,7 @@ private fun IncomeBudgetCategoryRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            if (category.hidden) "${category.name} · Hidden" else category.name,
+            if (category.hidden) stringResource(R.string.budget_hidden_name, displayName) else displayName,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -1159,7 +1173,7 @@ private fun BudgetOverviewRow(
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OverviewCell(
-                    "To budget",
+                    stringResource(R.string.budget_to_budget),
                     overview.toBudgetCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: "—",
                     Modifier.weight(1.35f),
                     Alignment.Start,
@@ -1168,14 +1182,14 @@ private fun BudgetOverviewRow(
                     pillOffset = (-8).dp,
                     onClick = onToBudgetClick,
                 )
-                OverviewCell("Budgeted", formatMoneyCents(overview.budgetedCents, hideDecimalPlaces), Modifier.weight(1f), Alignment.End)
-                if (showSpent) OverviewCell("Spent", formatMoneyCents(overview.spentCents, hideDecimalPlaces), Modifier.weight(1f), Alignment.End)
-                OverviewCell("Balance", formatMoneyCents(overview.availableCents, hideDecimalPlaces), Modifier.weight(1f), Alignment.End,
+                OverviewCell(stringResource(R.string.budget_budgeted), formatMoneyCents(overview.budgetedCents, hideDecimalPlaces), Modifier.weight(1f), Alignment.End)
+                if (showSpent) OverviewCell(stringResource(R.string.budget_spent), formatMoneyCents(overview.spentCents, hideDecimalPlaces), Modifier.weight(1f), Alignment.End)
+                OverviewCell(stringResource(R.string.budget_balance), formatMoneyCents(overview.availableCents, hideDecimalPlaces), Modifier.weight(1f), Alignment.End,
                     positive = overview.availableCents >= 0, pill = true, pillOffset = 8.dp)
             }
             if (overview.bufferedCents != 0L) {
                 Text(
-                    "${formatMoneyCents(overview.bufferedCents, hideDecimalPlaces)} held for next month",
+                    stringResource(R.string.budget_held_for_next_month, formatMoneyCents(overview.bufferedCents, hideDecimalPlaces)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
@@ -1240,6 +1254,7 @@ private fun BudgetGroupHeader(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
+    val displayName = budgetDisplayName(group.name)
     val rotation by animateFloatAsState(
         targetValue = if (collapsed) -90f else 0f,
         animationSpec = tween(220),
@@ -1259,10 +1274,10 @@ private fun BudgetGroupHeader(
             Row(modifier = Modifier.weight(1.35f), verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = if (collapsed) "Expand ${group.name}" else "Collapse ${group.name}",
+                    contentDescription = stringResource(if (collapsed) R.string.budget_expand_group else R.string.budget_collapse_group, displayName),
                     modifier = Modifier.width(24.dp).rotate(rotation),
                 )
-                Text(if (group.hidden) "${group.name} · Hidden" else group.name,
+                Text(if (group.hidden) stringResource(R.string.budget_hidden_name, displayName) else displayName,
                     style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
                     color = if (group.hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1282,14 +1297,14 @@ private fun BudgetGroupHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (showTotals) {
-                    AmountColumn("Budgeted", budgeted, Modifier.weight(1f), hideDecimalPlaces)
-                    if (showSpent) AmountColumn("Spent", -spent, Modifier.weight(1f), hideDecimalPlaces, muted = spent == 0L)
+                    AmountColumn(stringResource(R.string.budget_budgeted), budgeted, Modifier.weight(1f), hideDecimalPlaces)
+                    if (showSpent) AmountColumn(stringResource(R.string.budget_spent), -spent, Modifier.weight(1f), hideDecimalPlaces, muted = spent == 0L)
                 } else {
                     Spacer(Modifier.weight(if (showSpent) 2f else 1f))
                 }
             }
             if (showTotals) {
-                AmountColumn("Balance", balance, Modifier.weight(1f), hideDecimalPlaces, balance = true)
+                AmountColumn(stringResource(R.string.budget_balance), balance, Modifier.weight(1f), hideDecimalPlaces, balance = true)
             } else {
                 Spacer(Modifier.weight(1f))
             }
@@ -1336,6 +1351,7 @@ private fun CategoryRow(
     hideDecimalPlaces: Boolean,
     scheduleFunding: List<BudgetScheduleFunding> = emptyList(),
 ) {
+    val displayName = budgetDisplayName(category.name)
     if (showTopDivider) {
         HorizontalDivider(modifier = Modifier.padding(start = 16.dp),
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
@@ -1345,7 +1361,7 @@ private fun CategoryRow(
             .padding(horizontal = 16.dp, vertical = 11.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (category.hidden) "${category.name} · Hidden" else category.name,
+            Text(if (category.hidden) stringResource(R.string.budget_hidden_name, displayName) else displayName,
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1.35f),
                 color = if (category.hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1394,8 +1410,8 @@ private fun CategoryProgressBar(
     }
     val percent = kotlin.math.round(fraction * 100).toInt()
     val description = if (category.usesGoalProgress) {
-        "$percent percent funded toward goal"
-    } else "${category.progressState.label}, spent $percent percent of available"
+        stringResource(R.string.budget_progress_goal, percent)
+    } else stringResource(R.string.budget_progress_spending, stringResource(category.progressState.labelRes), percent)
     LinearProgressIndicator(
         progress = { fraction },
         modifier = modifier.clip(PillShape).semantics { stateDescription = description },
@@ -1429,7 +1445,7 @@ private fun EditBudgetAmountSheet(
     var autoAssignMode by remember(category, startInMoveMode, startInAutoAssignMode) {
         mutableStateOf(startInAutoAssignMode)
     }
-    val autoAssignChoices = remember(category, month) { buildAutoAssignChoices(category, month) }
+    val autoAssignChoices = buildAutoAssignChoices(category, month)
     val options = remember(groups, toBudgetCents) {
         listOf(MoveEndpoint(null, null, toBudgetCents)) + groups.filterNot { it.isIncome }.flatMap { group ->
             group.categories.filterNot { it.hidden }.map { item ->
@@ -1461,7 +1477,7 @@ private fun EditBudgetAmountSheet(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 BudgetEntryAction(
                     Icons.Outlined.Bolt,
-                    "Auto-Assign",
+                    stringResource(R.string.budget_auto_assign),
                     Modifier.weight(1f),
                     onClick = {
                         val expand = !autoAssignMode
@@ -1472,7 +1488,7 @@ private fun EditBudgetAmountSheet(
                 )
                 BudgetEntryAction(
                     Icons.Outlined.SwapHoriz,
-                    "Move Money",
+                    stringResource(R.string.budget_move_money),
                     Modifier.weight(1f),
                     onClick = {
                         val expand = !moveMode
@@ -1483,7 +1499,7 @@ private fun EditBudgetAmountSheet(
                 )
                 BudgetEntryAction(
                     Icons.Outlined.MoreHoriz,
-                    "Details",
+                    stringResource(R.string.budget_details),
                     Modifier.weight(1f),
                     onClick = {
                         coroutineScope.launch { sheetState.hide() }.invokeOnCompletion { onDetails() }
@@ -1511,7 +1527,7 @@ private fun EditBudgetAmountSheet(
                     ) {
                         if (autoAssignChoices.isEmpty()) {
                             Text(
-                                "No suggestions available",
+                                stringResource(R.string.budget_no_suggestions),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
@@ -1542,7 +1558,7 @@ private fun EditBudgetAmountSheet(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         MoveEndpointSelector(
-                            label = "From",
+                            label = stringResource(R.string.budget_from),
                             selected = from,
                             options = options.filterNot { it.group == to.group && it.category == to.category },
                             hideDecimalPlaces = hideDecimalPlaces,
@@ -1554,19 +1570,19 @@ private fun EditBudgetAmountSheet(
                         ) {
                             Icon(
                                 Icons.Outlined.SwapHoriz,
-                                contentDescription = "Swap source and destination",
+                                contentDescription = stringResource(R.string.budget_swap_source_destination),
                                 modifier = Modifier.height(20.dp),
                             )
                         }
                         MoveEndpointSelector(
-                            label = "To",
+                            label = stringResource(R.string.budget_to),
                             selected = to,
                             options = options.filterNot { it.group == from.group && it.category == from.category },
                             hideDecimalPlaces = hideDecimalPlaces,
                             onSelect = { to = it },
                         )
                         Text(
-                            "Available to move: ${formatMoneyCents(from.balanceCents.coerceAtLeast(0L), hideDecimalPlaces)}",
+                            stringResource(R.string.budget_available_to_move, formatMoneyCents(from.balanceCents.coerceAtLeast(0L), hideDecimalPlaces)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
@@ -1576,7 +1592,7 @@ private fun EditBudgetAmountSheet(
                 }
             }
             InlineCalculatorAmount(
-                if (moveMode) "Amount" else "Budgeted",
+                stringResource(if (moveMode) R.string.budget_amount else R.string.budget_budgeted),
                 enteredAmount,
                 Modifier.padding(horizontal = 20.dp),
             )
@@ -1755,7 +1771,7 @@ private fun BudgetSummarySheet(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
             Text(
-                if (covering) "Cover To Budget" else "Budget Summary",
+                stringResource(if (covering) R.string.budget_cover_to_budget else R.string.budget_summary),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -1768,7 +1784,7 @@ private fun BudgetSummarySheet(
             )
             if (bufferedCents != 0L) {
                 Text(
-                    "${formatMoneyCents(bufferedCents, hideDecimalPlaces)} held for next month",
+                    stringResource(R.string.budget_held_for_next_month, formatMoneyCents(bufferedCents, hideDecimalPlaces)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
@@ -1780,7 +1796,7 @@ private fun BudgetSummarySheet(
             ) {
                 BudgetEntryAction(
                     Icons.Outlined.SwapHoriz,
-                    if (covering) "Cover From" else "Move to Category",
+                    stringResource(if (covering) R.string.budget_cover_from else R.string.budget_move_to_category),
                     Modifier.weight(1f),
                     onClick = { action = if (action == BudgetSummaryAction.MOVE) null else BudgetSummaryAction.MOVE },
                     selected = action == BudgetSummaryAction.MOVE,
@@ -1788,7 +1804,7 @@ private fun BudgetSummarySheet(
                 if (!covering) {
                     BudgetEntryAction(
                         Icons.Outlined.Savings,
-                        "Hold for Next Month",
+                        stringResource(R.string.budget_hold_for_next_month),
                         Modifier.weight(1f),
                         onClick = { action = if (action == BudgetSummaryAction.HOLD) null else BudgetSummaryAction.HOLD },
                         selected = action == BudgetSummaryAction.HOLD,
@@ -1797,7 +1813,7 @@ private fun BudgetSummarySheet(
                 if (bufferedCents != 0L) {
                     BudgetEntryAction(
                         Icons.Outlined.RestartAlt,
-                        "Reset Hold",
+                        stringResource(R.string.budget_reset_hold),
                         Modifier.weight(1f),
                         onClick = onResetNextMonthBuffer,
                     )
@@ -1815,8 +1831,7 @@ private fun BudgetSummarySheet(
                 when (currentAction) {
                     BudgetSummaryAction.MOVE -> Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
                         Text(
-                            if (covering) "Choose a category to move money from"
-                            else "Choose a category to fund from To Budget",
+                            stringResource(if (covering) R.string.budget_choose_category_cover else R.string.budget_choose_category_fund),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 10.dp),
@@ -1827,7 +1842,7 @@ private fun BudgetSummarySheet(
                                 enabled = options.isNotEmpty(),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text(selectedCategory?.let { "${it.first} · ${it.second}" } ?: "No categories available")
+                                Text(selectedCategory?.let { "${it.first} · ${it.second}" } ?: stringResource(R.string.budget_no_categories))
                             }
                             DropdownMenu(expanded = categoryPickerExpanded, onDismissRequest = { categoryPickerExpanded = false }) {
                                 options.forEach { option ->
@@ -1838,7 +1853,7 @@ private fun BudgetSummarySheet(
                                 }
                             }
                         }
-                        InlineCalculatorAmount("Amount", moveAmount, Modifier.padding(top = 10.dp))
+                        InlineCalculatorAmount(stringResource(R.string.budget_amount), moveAmount, Modifier.padding(top = 10.dp))
                         CompactCalculatorPad(
                             calculator = moveCalculator,
                             horizontalPadding = 0.dp,
@@ -1854,12 +1869,12 @@ private fun BudgetSummarySheet(
                     }
                     BudgetSummaryAction.HOLD -> Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
                         Text(
-                            "Set aside part or all of To Budget instead of budgeting it now",
+                            stringResource(R.string.budget_set_aside),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 10.dp),
                         )
-                        InlineCalculatorAmount("Amount", holdAmount)
+                        InlineCalculatorAmount(stringResource(R.string.budget_amount), holdAmount)
                         CompactCalculatorPad(
                             calculator = holdCalculator,
                             horizontalPadding = 0.dp,
@@ -1880,7 +1895,6 @@ private data class MoveEndpoint(
     val category: String?,
     val balanceCents: Long,
 ) {
-    val title: String get() = category ?: "To Budget"
     val subtitle: String? get() = group
 }
 
@@ -1893,6 +1907,7 @@ private fun MoveEndpointSelector(
     onSelect: (MoveEndpoint) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val selectedTitle = selected.category ?: stringResource(R.string.budget_ready_to_budget)
     Box(Modifier.fillMaxWidth()) {
         Surface(
             onClick = { expanded = true },
@@ -1907,7 +1922,7 @@ private fun MoveEndpointSelector(
                 Column(Modifier.weight(1f)) {
                     Text(label, style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(selected.title, style = MaterialTheme.typography.titleMedium,
+                    Text(selectedTitle, style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     selected.subtitle?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall,
@@ -1922,10 +1937,11 @@ private fun MoveEndpointSelector(
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
+                val optionTitle = option.category ?: stringResource(R.string.budget_ready_to_budget)
                 DropdownMenuItem(
                     text = {
                         Column {
-                            Text(option.title)
+                            Text(optionTitle)
                             Text(
                                 listOfNotNull(option.subtitle, formatMoneyCents(option.balanceCents, hideDecimalPlaces))
                                     .joinToString(" · "),
@@ -1968,6 +1984,7 @@ private fun CategoryDetailsScreen(
     scheduleFunding: List<BudgetScheduleFunding> = emptyList(),
     showNotes: Boolean = true,
 ) {
+    val displayName = budgetDisplayName(category.name)
     var note by remember(category) { mutableStateOf(category.note) }
     var noteEditorOpen by remember(category) { mutableStateOf(false) }
     var rollover by remember(category) { mutableStateOf(category.carryoverEnabled) }
@@ -1982,35 +1999,35 @@ private fun CategoryDetailsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.common_back))
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(category.name, style = MaterialTheme.typography.titleLarge,
+                    Text(displayName, style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(formatMonth(month), style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Box {
                     IconButton(onClick = { overflowOpen = true }) {
-                        Icon(Icons.Outlined.MoreVert, contentDescription = "Category options")
+                        Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.budget_category_options))
                     }
                     DropdownMenu(expanded = overflowOpen, onDismissRequest = { overflowOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text(if (favorite) "Remove from favorites" else "Add to favorites") },
+                            text = { Text(stringResource(if (favorite) R.string.budget_remove_favorite else R.string.budget_add_favorite)) },
                             leadingIcon = { Icon(if (favorite) Icons.Filled.Star else Icons.Outlined.StarBorder, null) },
                             onClick = { overflowOpen = false; onFavoriteChange(!favorite) },
                         )
-                        DropdownMenuItem(text = { Text("Transactions this month") }, onClick = {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.budget_transactions_month)) }, onClick = {
                             overflowOpen = false; onTransactionsThisMonth()
                         })
-                        DropdownMenuItem(text = { Text("Rename category") }, onClick = {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.budget_rename_category)) }, onClick = {
                             overflowOpen = false; onRename()
                         })
-                        DropdownMenuItem(text = { Text(if (hidden) "Unhide category" else "Hide category") }, onClick = {
+                        DropdownMenuItem(text = { Text(stringResource(if (hidden) R.string.budget_unhide_category else R.string.budget_hide_category)) }, onClick = {
                             overflowOpen = false; onSetHidden(!hidden)
                         })
                         HorizontalDivider()
-                        DropdownMenuItem(text = { Text("Delete category", color = MaterialTheme.colorScheme.error) }, onClick = {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.budget_delete_category), color = MaterialTheme.colorScheme.error) }, onClick = {
                             overflowOpen = false; deleteConfirmOpen = true
                         })
                     }
@@ -2025,7 +2042,7 @@ private fun CategoryDetailsScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("Balance", style = MaterialTheme.typography.labelLarge,
+                        Text(stringResource(R.string.budget_balance), style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f))
                         Text(formatMoneyCents(category.balanceCents, hideDecimalPlaces),
                             style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
@@ -2035,15 +2052,15 @@ private fun CategoryDetailsScreen(
                                 Modifier.fillMaxWidth().height(5.dp))
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            SummaryValue("Budgeted", category.assignedCents, hideDecimalPlaces, Modifier.weight(1f))
-                            SummaryValue("Spent", -category.spentCents, hideDecimalPlaces, Modifier.weight(1f))
+                            SummaryValue(stringResource(R.string.budget_budgeted), category.assignedCents, hideDecimalPlaces, Modifier.weight(1f))
+                            SummaryValue(stringResource(R.string.budget_spent), -category.spentCents, hideDecimalPlaces, Modifier.weight(1f))
                         }
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BudgetEntryAction(Icons.Outlined.Add, "Budget", Modifier.weight(1f), onEditBudget)
-                    BudgetEntryAction(Icons.Outlined.SwapHoriz, "Move Money", Modifier.weight(1f), onMoveMoney)
-                    BudgetEntryAction(Icons.Outlined.Bolt, "Auto-Assign", Modifier.weight(1f), onAutoAssign)
+                    BudgetEntryAction(Icons.Outlined.Add, stringResource(R.string.budget_budget), Modifier.weight(1f), onEditBudget)
+                    BudgetEntryAction(Icons.Outlined.SwapHoriz, stringResource(R.string.budget_move_money), Modifier.weight(1f), onMoveMoney)
+                    BudgetEntryAction(Icons.Outlined.Bolt, stringResource(R.string.budget_auto_assign), Modifier.weight(1f), onAutoAssign)
                 }
                 TargetDetailsCard(
                     category = category,
@@ -2061,8 +2078,8 @@ private fun CategoryDetailsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("Note", fontWeight = FontWeight.SemiBold)
-                                    Text(note.ifBlank { "Add note" }, style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.budget_note), fontWeight = FontWeight.SemiBold)
+                                    Text(if (note.isBlank()) stringResource(R.string.budget_add_note) else note, style = MaterialTheme.typography.bodySmall,
                                         color = if (note.isBlank()) MaterialTheme.colorScheme.primary
                                             else MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -2075,8 +2092,8 @@ private fun CategoryDetailsScreen(
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("Rollover overspending", fontWeight = FontWeight.SemiBold)
-                                Text("Carry overspending into the next month",
+                                Text(stringResource(R.string.budget_rollover_overspending), fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.budget_rollover_description),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -2088,12 +2105,12 @@ private fun CategoryDetailsScreen(
                     Column {
                         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 2.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Text("Recent activity", style = MaterialTheme.typography.titleSmall,
+                            Text(stringResource(R.string.budget_recent_activity), style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            TextButton(onClick = onAllTransactions) { Text("View all") }
+                            TextButton(onClick = onAllTransactions) { Text(stringResource(R.string.budget_view_all)) }
                         }
                         if (transactions.isEmpty()) {
-                            Text("No recent transactions", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Text(stringResource(R.string.budget_no_recent_transactions), color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp))
                         } else transactions.forEachIndexed { index, transaction ->
                             if (index > 0) HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
@@ -2101,7 +2118,7 @@ private fun CategoryDetailsScreen(
                                 .padding(horizontal = 16.dp, vertical = 11.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(transaction.payee.ifBlank { "Unknown payee" }, fontWeight = FontWeight.SemiBold,
+                                    Text(if (transaction.payee.isBlank()) stringResource(R.string.budget_unknown_payee) else transaction.payee, fontWeight = FontWeight.SemiBold,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(listOf(formatStoredDate(transaction.date), transaction.account)
                                         .filter(String::isNotBlank).joinToString(" · "),
@@ -2132,7 +2149,7 @@ private fun CategoryDetailsScreen(
         var noteDraft by remember(category, noteEditorOpen) { mutableStateOf(note) }
         AlertDialog(
             onDismissRequest = { noteEditorOpen = false },
-            title = { Text(if (note.isBlank()) "Add note" else "Edit note") },
+            title = { Text(stringResource(if (note.isBlank()) R.string.budget_add_note else R.string.budget_edit_note)) },
             text = {
                 OutlinedTextField(
                     value = noteDraft,
@@ -2140,7 +2157,7 @@ private fun CategoryDetailsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     maxLines = 8,
-                    placeholder = { Text("Category note") },
+                    placeholder = { Text(stringResource(R.string.budget_category_note)) },
                 )
             },
             confirmButton = {
@@ -2148,20 +2165,20 @@ private fun CategoryDetailsScreen(
                     note = noteDraft
                     onSaveNote(noteDraft)
                     noteEditorOpen = false
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.common_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { noteEditorOpen = false }) { Text("Cancel") }
+                TextButton(onClick = { noteEditorOpen = false }) { Text(stringResource(R.string.common_cancel)) }
             },
         )
     }
     if (deleteConfirmOpen) {
         AlertDialog(
             onDismissRequest = { deleteConfirmOpen = false },
-            title = { Text("Delete ${category.name}?") },
-            text = { Text("Existing transactions will become uncategorized. This cannot be undone.") },
-            confirmButton = { TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { deleteConfirmOpen = false }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.budget_delete_named_category, displayName)) },
+            text = { Text(stringResource(R.string.budget_delete_category_warning)) },
+            confirmButton = { TextButton(onClick = onDelete) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deleteConfirmOpen = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 }
@@ -2186,67 +2203,86 @@ private fun TargetDetailsCard(
     val supporting: String
     when {
         category.hasUnsupportedTarget -> {
-            title = if (category.automationReadOnly) "Notes-managed target" else "Advanced target"
-            detail = if (category.automationReadOnly) "Managed from category notes" else "Managed in Actual Budget"
-            supporting = "View target information"
+            title = stringResource(if (category.automationReadOnly) R.string.budget_notes_managed_target else R.string.budget_advanced_target)
+            detail = stringResource(if (category.automationReadOnly) R.string.budget_managed_notes else R.string.budget_managed_actual)
+            supporting = stringResource(R.string.budget_view_target_info)
         }
         category.automations.size > 1 -> {
-            title = "${category.automations.size} automations"
-            detail = category.automations.joinToString { it.type.label }
-            supporting = "Edit automation list · Apply after whole-budget preview"
+            title = pluralStringResource(R.plurals.budget_automation_count, category.automations.size, category.automations.size)
+            detail = category.automations.map { stringResource(it.type.labelRes) }.joinToString()
+            supporting = stringResource(R.string.budget_edit_automation_list)
         }
         target == null -> {
-            title = "Set a target"
-            detail = "Plan how much to budget"
-            supporting = "Auto-Assign can use your target"
+            title = stringResource(R.string.budget_set_target)
+            detail = stringResource(R.string.budget_plan_amount)
+            supporting = stringResource(R.string.budget_auto_assign_target_hint)
         }
         else -> {
-            title = target.type.label
+            title = stringResource(target.type.labelRes)
             detail = when (target.type) {
                 BudgetTarget.Type.HISTORICAL -> when (target.historicalMode) {
-                    BudgetTarget.HistoricalMode.AVERAGE -> "Average of ${target.historicalMonths} recent months"
-                    BudgetTarget.HistoricalMode.COPY -> "Copy ${target.historicalMonths} months ago"
-                }
-                BudgetTarget.Type.REMAINDER -> buildString {
-                    append("Weight ${target.weight}")
-                    target.limitAmountCents?.let {
-                        append(" · capped ${formatMoneyCents(it, hideDecimalPlaces)} ${target.limitPeriod?.jsonValue}")
-                        if (target.limitHold) append(" · hold")
+                    BudgetTarget.HistoricalMode.AVERAGE -> if (target.historicalMonths == 1) {
+                        stringResource(R.string.automation_average_recent_singular)
+                    } else {
+                        pluralStringResource(R.plurals.automation_average_recent_plural, target.historicalMonths, target.historicalMonths)
+                    }
+                    BudgetTarget.HistoricalMode.COPY -> if (target.historicalMonths == 1) {
+                        stringResource(R.string.automation_copy_ago_singular)
+                    } else {
+                        pluralStringResource(R.plurals.automation_copy_ago_plural, target.historicalMonths, target.historicalMonths)
                     }
                 }
-                BudgetTarget.Type.PERCENTAGE -> "${target.percentage}% of ${if (target.percentagePrevious) "last" else "this"} month's ${target.percentageSource}"
-                BudgetTarget.Type.SCHEDULE -> target.scheduleName ?: linkedSchedule?.name ?: "No schedule linked"
-                BudgetTarget.Type.REFILL -> "Refill to the category's balance cap"
+                BudgetTarget.Type.REMAINDER -> buildString {
+                    append(stringResource(R.string.automation_weight_summary, target.weight))
+                    target.limitAmountCents?.let {
+                        append(" · ")
+                        val periodLabel = if (target.limitPeriod == null) "" else budgetLimitPeriodLabel(target.limitPeriod)
+                        append(stringResource(R.string.budget_capped_amount, formatMoneyCents(it, hideDecimalPlaces), periodLabel))
+                        if (target.limitHold) append(" · ${stringResource(R.string.budget_hold_short)}")
+                    }
+                }
+                BudgetTarget.Type.PERCENTAGE -> stringResource(
+                    R.string.automation_percent_summary,
+                    target.percentage,
+                    stringResource(if (target.percentagePrevious) R.string.automation_last_month else R.string.automation_this_month).lowercase(),
+                    budgetPercentageSourceLabel(target.percentageSource),
+                )
+                BudgetTarget.Type.SCHEDULE -> target.scheduleName ?: linkedSchedule?.name ?: stringResource(R.string.budget_no_schedule_linked)
+                BudgetTarget.Type.REFILL -> stringResource(R.string.budget_refill_balance_cap)
                 else -> formatMoneyCents(target.amountCents, hideDecimalPlaces)
             }
             val timing = when (target.type) {
-                BudgetTarget.Type.FIXED -> "Every ${if (target.everyCount > 1) "${target.everyCount} " else ""}${target.period.jsonValue}${if (target.everyCount > 1) "s" else ""}"
-                BudgetTarget.Type.LIMIT -> when (target.limitPeriod ?: BudgetTarget.LimitPeriod.MONTHLY) {
-                    BudgetTarget.LimitPeriod.DAILY -> "Daily balance cap"
-                    BudgetTarget.LimitPeriod.WEEKLY -> "Weekly balance cap"
-                    BudgetTarget.LimitPeriod.MONTHLY -> "Monthly balance cap"
+                BudgetTarget.Type.FIXED -> if (target.everyCount > 1) {
+                    stringResource(R.string.budget_every_count_period, target.everyCount, budgetPeriodLabel(target.period, target.everyCount))
+                } else {
+                    stringResource(R.string.budget_every_period, budgetPeriodLabel(target.period, target.everyCount))
                 }
-                BudgetTarget.Type.REFILL -> "Resets every month"
-                BudgetTarget.Type.BY_DATE -> target.targetMonth?.let { "Target month ${formatMonth(it)}" }
-                    ?: "Target date"
-                BudgetTarget.Type.HISTORICAL -> "Recalculates every month"
-                BudgetTarget.Type.GOAL -> "Target only"
-                BudgetTarget.Type.REMAINDER -> "After other automations"
-                BudgetTarget.Type.PERCENTAGE -> "At this priority"
+                BudgetTarget.Type.LIMIT -> when (target.limitPeriod ?: BudgetTarget.LimitPeriod.MONTHLY) {
+                    BudgetTarget.LimitPeriod.DAILY -> stringResource(R.string.budget_daily_cap)
+                    BudgetTarget.LimitPeriod.WEEKLY -> stringResource(R.string.budget_weekly_cap)
+                    BudgetTarget.LimitPeriod.MONTHLY -> stringResource(R.string.budget_monthly_cap)
+                }
+                BudgetTarget.Type.REFILL -> stringResource(R.string.budget_resets_monthly)
+                BudgetTarget.Type.BY_DATE -> target.targetMonth?.let { stringResource(R.string.budget_target_month, formatMonth(it)) }
+                    ?: stringResource(R.string.budget_target_date)
+                BudgetTarget.Type.HISTORICAL -> stringResource(R.string.budget_recalculates_monthly)
+                BudgetTarget.Type.GOAL -> stringResource(R.string.budget_target_only)
+                BudgetTarget.Type.REMAINDER -> stringResource(R.string.budget_after_other_automations)
+                BudgetTarget.Type.PERCENTAGE -> stringResource(R.string.budget_at_priority)
                 BudgetTarget.Type.SCHEDULE -> linkedSchedule?.let {
-                    "Due in ${formatMoneyCents(it.amountCents, hideDecimalPlaces)}"
-                } ?: "Schedule-driven"
+                    stringResource(R.string.budget_due_amount, formatMoneyCents(it.amountCents, hideDecimalPlaces))
+                } ?: stringResource(R.string.budget_schedule_driven)
             }
             supporting = when {
-                target.type == BudgetTarget.Type.LIMIT -> "$timing · Does not request funding automatically"
-                target.type == BudgetTarget.Type.GOAL -> "$timing · Does not budget funds automatically"
-                target.type == BudgetTarget.Type.REMAINDER -> "$timing · Applied in whole-budget preview"
-                target.type == BudgetTarget.Type.PERCENTAGE -> "$timing · Applied in whole-budget preview"
-                target.type == BudgetTarget.Type.REFILL -> "$timing · Applied in whole-budget preview"
+                target.type == BudgetTarget.Type.LIMIT -> "$timing · ${stringResource(R.string.budget_no_auto_funding)}"
+                target.type == BudgetTarget.Type.GOAL -> "$timing · ${stringResource(R.string.budget_no_auto_budgeting)}"
+                target.type == BudgetTarget.Type.REMAINDER -> "$timing · ${stringResource(R.string.budget_applied_preview)}"
+                target.type == BudgetTarget.Type.PERCENTAGE -> "$timing · ${stringResource(R.string.budget_applied_preview)}"
+                target.type == BudgetTarget.Type.REFILL -> "$timing · ${stringResource(R.string.budget_applied_preview)}"
                 target.type == BudgetTarget.Type.SCHEDULE && linkedSchedule == null ->
-                    "$timing · Linked schedule not found — tap to relink"
-                target.type == BudgetTarget.Type.SCHEDULE -> "$timing · Applied in whole-budget preview"
-                else -> "$timing · Auto-Assign ${formatMoneyCents(target.suggestedBudget(category, month), hideDecimalPlaces)}"
+                    "$timing · ${stringResource(R.string.budget_schedule_missing)}"
+                target.type == BudgetTarget.Type.SCHEDULE -> "$timing · ${stringResource(R.string.budget_applied_preview)}"
+                else -> "$timing · ${stringResource(R.string.budget_auto_assign_amount, formatMoneyCents(target.suggestedBudget(category, month), hideDecimalPlaces))}"
             }
         }
     }
@@ -2255,7 +2291,7 @@ private fun TargetDetailsCard(
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Target", style = MaterialTheme.typography.labelMedium,
+                Text(stringResource(R.string.budget_target), style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(detail, style = MaterialTheme.typography.bodyMedium)
@@ -2264,7 +2300,7 @@ private fun TargetDetailsCard(
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Edit target",
+            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = stringResource(R.string.budget_edit_target),
                 modifier = Modifier.rotate(-90f), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -2281,24 +2317,25 @@ private fun SummaryValue(label: String, amount: Long, hideDecimals: Boolean, mod
     }
 }
 
+@Composable
 private fun buildAutoAssignChoices(category: BudgetCategory, month: String): List<Pair<String, Long>> = buildList {
     category.target?.takeUnless { it.type == BudgetTarget.Type.LIMIT }?.let { target ->
-        add("Target · ${target.type.label}" to target.suggestedBudget(category, month))
+        add("${stringResource(R.string.budget_target)} · ${stringResource(target.type.labelRes)}" to target.suggestedBudget(category, month))
     }
     category.history.firstOrNull()?.let { last ->
         val spent = kotlin.math.abs(minOf(last.spentCents, 0L))
-        if (spent > 0) add("Spent last month" to spent)
-        if (last.assignedCents != 0L) add("Budgeted last month" to last.assignedCents)
+        if (spent > 0) add(stringResource(R.string.budget_spent_last_month) to spent)
+        if (last.assignedCents != 0L) add(stringResource(R.string.budget_budgeted_last_month) to last.assignedCents)
     }
     val spending = category.history.map { kotlin.math.abs(minOf(it.spentCents, 0L)) }
     if (spending.size >= 2) {
         val average = (spending.sum().toDouble() / spending.size).toLong()
-        if (average > 0) add("Average spent (${spending.size} months)" to average)
+        if (average > 0) add(pluralStringResource(R.plurals.budget_average_spent, spending.size, spending.size) to average)
     }
     if (category.balanceCents != 0L) {
-        add("Reset balance to zero" to (category.assignedCents - category.balanceCents))
+        add(stringResource(R.string.budget_reset_balance_zero) to (category.assignedCents - category.balanceCents))
     }
-    if (category.assignedCents != 0L) add("Set budgeted to zero" to 0L)
+    if (category.assignedCents != 0L) add(stringResource(R.string.budget_set_budgeted_zero) to 0L)
 }.distinctBy { it.first }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2318,23 +2355,23 @@ private fun CategoryActionsSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
-            ActuaSheetTitle(category.name)
-            SheetAction("Rename category", onRename)
+            ActuaSheetTitle(budgetDisplayName(category.name))
+            SheetAction(stringResource(R.string.budget_rename_category), onRename)
             if (!category.isIncome) {
                 SheetAction(when {
-                    category.hasUnsupportedTarget -> "View target"
-                    category.automations.isEmpty() -> "Set automations"
-                    else -> "Edit automations"
+                    category.hasUnsupportedTarget -> stringResource(R.string.budget_view_target)
+                    category.automations.isEmpty() -> stringResource(R.string.budget_set_automations)
+                    else -> stringResource(R.string.budget_edit_automations)
                 }, onSetTarget)
-                SheetAction("Budget details", onDetails)
-                SheetAction("Edit budgeted amount", onEditBudget)
+                SheetAction(stringResource(R.string.budget_budget_details), onDetails)
+                SheetAction(stringResource(R.string.budget_edit_budgeted), onEditBudget)
             }
-            SheetAction("Transactions this month", onTransactionsThisMonth)
-            SheetAction("All transactions", onAllTransactions)
+            SheetAction(stringResource(R.string.budget_transactions_month), onTransactionsThisMonth)
+            SheetAction(stringResource(R.string.budget_all_transactions), onAllTransactions)
             if (!category.isIncome && category.available != 0) {
-                SheetAction(if (category.available < 0) "Cover overspending" else "Move money", onMoveMoney)
+                SheetAction(stringResource(if (category.available < 0) R.string.budget_cover_overspending else R.string.budget_move_money), onMoveMoney)
             }
-            SheetAction(if (hidden) "Unhide category" else "Hide category", { onSetHidden(!hidden) }, destructive = !hidden)
+            SheetAction(stringResource(if (hidden) R.string.budget_unhide_category else R.string.budget_hide_category), { onSetHidden(!hidden) }, destructive = !hidden)
         }
     }
 }
@@ -2349,10 +2386,10 @@ private fun FundingActionsSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
-            ActuaSheetTitle(category.name)
-            SheetAction("Edit budgeted amount", onEditAssigned)
+            ActuaSheetTitle(budgetDisplayName(category.name))
+            SheetAction(stringResource(R.string.budget_edit_budgeted), onEditAssigned)
             SheetAction(
-                if (category.balanceCents < 0L) "Cover overspending" else "Move money",
+                stringResource(if (category.balanceCents < 0L) R.string.budget_cover_overspending else R.string.budget_move_money),
                 onMoveMoney,
             )
         }
@@ -2365,10 +2402,10 @@ private fun GroupActionsSheet(group: BudgetGroup, onDismiss: () -> Unit, onRenam
     hidden: Boolean, onSetHidden: (Boolean) -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
-            ActuaSheetTitle(group.name)
-            SheetAction("Rename group", onRename)
+            ActuaSheetTitle(budgetDisplayName(group.name))
+            SheetAction(stringResource(R.string.budget_rename_group), onRename)
             if (!group.isIncome || hidden) {
-                SheetAction(if (hidden) "Unhide group" else "Hide group", { onSetHidden(!hidden) }, destructive = !hidden)
+                SheetAction(stringResource(if (hidden) R.string.budget_unhide_group else R.string.budget_hide_group), { onSetHidden(!hidden) }, destructive = !hidden)
             }
         }
     }
@@ -2380,10 +2417,10 @@ private fun AddBudgetSheet(onDismiss: () -> Unit,
     onApplyTemplate: (Boolean) -> Unit, onPreviewCleanup: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(bottom = 28.dp)) {
-            ActuaSheetTitle("Add to budget")
-            SheetAction("Apply budget templates", onClick = { onApplyTemplate(false) })
-            SheetAction("Overwrite budget templates", onClick = { onApplyTemplate(true) })
-            SheetAction("Month-end cleanup", onClick = onPreviewCleanup)
+            ActuaSheetTitle(stringResource(R.string.budget_add_to_budget))
+            SheetAction(stringResource(R.string.budget_apply_templates), onClick = { onApplyTemplate(false) })
+            SheetAction(stringResource(R.string.budget_overwrite_templates), onClick = { onApplyTemplate(true) })
+            SheetAction(stringResource(R.string.budget_month_end_cleanup), onClick = onPreviewCleanup)
         }
     }
 }
@@ -2402,14 +2439,13 @@ private fun CleanupPreviewSheet(
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Review month-end cleanup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.budget_review_cleanup), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "Nothing changes until you confirm. This moves leftover balances between the source and sink " +
-                    "categories defined by \"#cleanup\" notes for ${formatMonth(preview.month)}.",
+                stringResource(R.string.budget_cleanup_intro, formatMonth(preview.month)),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (preview.changes.isEmpty() && preview.goalChanges.isEmpty()) {
-                Text(if (preview.isUpToDate) "No cleanup groups need changes." else "No categories are configured for cleanup.")
+                Text(stringResource(if (preview.isUpToDate) R.string.budget_cleanup_current else R.string.budget_cleanup_none))
             } else {
                 preview.changes.forEach { change ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -2429,34 +2465,36 @@ private fun CleanupPreviewSheet(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(change.categoryName, fontWeight = FontWeight.Medium)
-                        Text("${change.groupName} · Goal reset", style = MaterialTheme.typography.bodySmall,
+                        Text(stringResource(R.string.budget_goal_reset, change.groupName), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        "${change.currentCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: "None"} → " +
-                            (change.proposedCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: "None"),
+                        "${change.currentCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: stringResource(R.string.common_none)} → " +
+                            (change.proposedCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: stringResource(R.string.common_none)),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
             if (preview.warnings.isNotEmpty()) {
+                val localizedWarnings = mutableListOf<String>()
+                for (warning in preview.warnings) localizedWarnings += localizedCleanupWarning(warning)
                 Text(
-                    preview.warnings.joinToString("\n"),
+                    localizedWarnings.joinToString("\n"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
             }
             if (preview.invalidCategories.isNotEmpty()) {
                 Text(
-                    "Left untouched because their cleanup definition is unsupported: ${preview.invalidCategories.joinToString()}.",
+                    stringResource(R.string.budget_cleanup_unsupported, preview.invalidCategories.joinToString()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
                 Button(enabled = preview.changes.isNotEmpty() || preview.goalChanges.isNotEmpty(),
-                    onClick = { onApply(preview) }) { Text("Apply cleanup") }
+                    onClick = { onApply(preview) }) { Text(stringResource(R.string.budget_apply_cleanup)) }
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -2477,19 +2515,18 @@ private fun BudgetTemplatePreviewSheet(
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Review budget template", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.budget_review_template), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
                 if (preview.overwriteExisting) {
-                    "Nothing changes until you confirm. Supported automations will recalculate existing budgeted amounts for ${formatMonth(preview.month)}."
+                    stringResource(R.string.budget_template_overwrite_intro, formatMonth(preview.month))
                 } else {
-                    "Nothing changes until you apply this preview. Categories that already have a budgeted amount will stay unchanged."
+                    stringResource(R.string.budget_template_apply_intro)
                 },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (preview.changes.isEmpty() && preview.goalChanges.isEmpty()) {
                 Text(
-                    if (preview.skippedExistingCount > 0) "No unbudgeted categories need changes."
-                    else "All supported targets are already up to date.",
+                    stringResource(if (preview.skippedExistingCount > 0) R.string.budget_no_unbudgeted_changes else R.string.budget_targets_current),
                 )
             } else {
                 preview.changes.forEach { change ->
@@ -2507,7 +2544,7 @@ private fun BudgetTemplatePreviewSheet(
                 }
                 HorizontalDivider()
                 Row(Modifier.fillMaxWidth()) {
-                    Text("Net change", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.budget_net_change), Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                     Text(formatMoneyCents(preview.netBudgetChangeCents, hideDecimalPlaces), fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -2515,52 +2552,51 @@ private fun BudgetTemplatePreviewSheet(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(change.categoryName, fontWeight = FontWeight.Medium)
-                        Text("${change.groupName} · Goal", style = MaterialTheme.typography.bodySmall,
+                        Text(stringResource(R.string.budget_group_goal, change.groupName), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        "${change.currentCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: "None"} → " +
-                            (change.proposedCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: "None"),
+                        "${change.currentCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: stringResource(R.string.common_none)} → " +
+                            (change.proposedCents?.let { formatMoneyCents(it, hideDecimalPlaces) } ?: stringResource(R.string.common_none)),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
             if (preview.unchangedCount > 0) Text(
-                "${preview.unchangedCount} supported ${if (preview.unchangedCount == 1) "target is" else "targets are"} already current.",
+                pluralStringResource(R.plurals.budget_targets_already_current, preview.unchangedCount, preview.unchangedCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (preview.skippedExistingCount > 0) Text(
-                "${preview.skippedExistingCount} already-budgeted ${if (preview.skippedExistingCount == 1) "category was" else "categories were"} left unchanged.",
+                pluralStringResource(R.plurals.budget_categories_unchanged, preview.skippedExistingCount, preview.skippedExistingCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (preview.unsupportedCategories.isNotEmpty()) {
                 Text(
-                    "Not applied because these categories use automation types Actua cannot safely evaluate yet: ${preview.unsupportedCategories.joinToString()}.",
+                    stringResource(R.string.budget_unsupported_automations, preview.unsupportedCategories.joinToString()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
             if (preview.limitedCategories.isNotEmpty()) {
                 Text(
-                    "Available funds limited: ${preview.limitedCategories.joinToString()}. Higher-priority automations were funded first.",
+                    stringResource(R.string.budget_available_funds_limited, preview.limitedCategories.joinToString()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
             }
             if (preview.cappedCategories.isNotEmpty()) {
                 Text(
-                    "Remainder caps apply to: ${preview.cappedCategories.joinToString()}. " +
-                        "The preview includes daily, weekly, or monthly cap and carryover behavior.",
+                    stringResource(R.string.budget_remainder_caps, preview.cappedCategories.joinToString()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
                 Button(enabled = preview.changes.isNotEmpty() || preview.goalChanges.isNotEmpty(),
-                    onClick = { onApply(preview) }) { Text("Apply changes") }
+                    onClick = { onApply(preview) }) { Text(stringResource(R.string.budget_apply_changes)) }
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -2581,4 +2617,49 @@ private fun SheetAction(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun budgetPeriodLabel(period: BudgetTarget.Period, quantity: Int): String = stringResource(
+    when (period) {
+        BudgetTarget.Period.DAY -> if (quantity == 1) R.string.automation_period_day_singular else R.string.automation_period_day_plural
+        BudgetTarget.Period.WEEK -> if (quantity == 1) R.string.automation_period_week_singular else R.string.automation_period_week_plural
+        BudgetTarget.Period.MONTH -> if (quantity == 1) R.string.automation_period_month_singular else R.string.automation_period_month_plural
+        BudgetTarget.Period.YEAR -> if (quantity == 1) R.string.automation_period_year_singular else R.string.automation_period_year_plural
+    },
+)
+
+@Composable
+private fun budgetLimitPeriodLabel(period: BudgetTarget.LimitPeriod): String = stringResource(
+    when (period) {
+        BudgetTarget.LimitPeriod.DAILY -> R.string.automation_limit_daily
+        BudgetTarget.LimitPeriod.WEEKLY -> R.string.automation_limit_weekly
+        BudgetTarget.LimitPeriod.MONTHLY -> R.string.automation_limit_monthly
+    },
+)
+
+@Composable
+private fun budgetPercentageSourceLabel(source: String): String = when (source.lowercase()) {
+    "available funds" -> stringResource(R.string.automation_available_funds)
+    "all income" -> stringResource(R.string.automation_all_income)
+    else -> source
+}
+
+@Composable
+private fun budgetDisplayName(name: String): String =
+    name.ifBlank { stringResource(R.string.common_unknown) }
+
+@Composable
+private fun localizedCleanupWarning(warning: String): String {
+    Regex("""Cleanup group "(.+)" has no matching sink categories\.""").matchEntire(warning)?.let {
+        return stringResource(R.string.budget_cleanup_no_sinks, it.groupValues[1])
+    }
+    Regex("""(.+) does not have available funds\.""").matchEntire(warning)?.let {
+        return stringResource(R.string.budget_cleanup_no_funds, it.groupValues[1])
+    }
+    return if (warning == "Global: No funds are available to reallocate.") {
+        stringResource(R.string.budget_cleanup_global_no_funds)
+    } else {
+        warning
+    }
 }

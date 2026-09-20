@@ -50,10 +50,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.azimulkabir.actua.model.Account
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.model.Transaction
 import com.azimulkabir.actua.model.CreditCardStatus
 import com.azimulkabir.actua.ui.components.RenameDialog
@@ -68,20 +70,20 @@ import com.azimulkabir.actua.ui.theme.Spacing
 import java.text.NumberFormat
 import kotlin.math.absoluteValue
 
-private data class AccountSection(val title: String, val accounts: List<Account>)
+private data class AccountSection(val titleRes: Int, val accounts: List<Account>)
 
 private val sampleAccountSections = listOf(
-    AccountSection("On budget", listOf(
+    AccountSection(R.string.accounts_on_budget, listOf(
         Account("Everyday account", 48_250, "Bank"),
         Account("Cash", 3_400, "Cash"),
         Account("Savings", 86_500, "Savings"),
         Account("Credit card", -12_780, "Credit"),
     )),
-    AccountSection("Off budget", listOf(
+    AccountSection(R.string.accounts_off_budget, listOf(
         Account("Investment account", 125_000, "Investment"),
         Account("Motorbike loan", -65_000, "Loan"),
     )),
-    AccountSection("Closed accounts", listOf(
+    AccountSection(R.string.accounts_closed, listOf(
         Account("Old bank account", 0, "Bank"),
     )),
 )
@@ -111,7 +113,7 @@ fun AccountsScreen(
     LaunchedEffect(scrollToTopRequest) {
         if (scrollToTopRequest > 0) listState.animateScrollToItem(0)
     }
-    var collapsedSections by remember { mutableStateOf(setOf("Closed accounts")) }
+    var collapsedSections by remember { mutableStateOf(setOf(R.string.accounts_closed)) }
     var selectedAccount by remember { mutableStateOf<Account?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
     var accountMenuExpanded by remember { mutableStateOf(false) }
@@ -121,14 +123,14 @@ fun AccountsScreen(
     // (e.g. opening the overflow menu or selecting an account), not just when `accounts` changes.
     val accountSections = remember(accounts) {
         listOf(
-            AccountSection("On budget", accounts.filter { !it.offBudget && !it.closed }),
-            AccountSection("Off budget", accounts.filter { it.offBudget && !it.closed }),
-            AccountSection("Closed accounts", accounts.filter { it.closed }),
+            AccountSection(R.string.accounts_on_budget, accounts.filter { !it.offBudget && !it.closed }),
+            AccountSection(R.string.accounts_off_budget, accounts.filter { it.offBudget && !it.closed }),
+            AccountSection(R.string.accounts_closed, accounts.filter { it.closed }),
         ).filter { it.accounts.isNotEmpty() }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Accounts") {
+        ActuaScreenHeader(title = stringResource(R.string.accounts_title)) {
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.surfaceContainer,
@@ -136,21 +138,21 @@ fun AccountsScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onSearch) {
-                        Icon(Icons.Outlined.Search, contentDescription = "Search Actua")
+                        Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.accounts_search))
                     }
                     IconButton(onClick = { showAddSheet = true }) {
-                        Icon(Icons.Outlined.Add, contentDescription = "Add account")
+                        Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.accounts_add))
                     }
                     Box {
                         IconButton(onClick = { accountMenuExpanded = true }) {
-                            Icon(Icons.Outlined.MoreVert, contentDescription = "Account display options")
+                            Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.accounts_display_options))
                         }
                         DropdownMenu(
                             expanded = accountMenuExpanded,
                             onDismissRequest = { accountMenuExpanded = false },
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Monthly summary") },
+                                text = { Text(stringResource(R.string.accounts_monthly_summary)) },
                                 trailingIcon = {
                                     Switch(
                                         checked = showMonthlySummary,
@@ -163,16 +165,16 @@ fun AccountsScreen(
                             )
                             HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text("Expand all") },
+                                text = { Text(stringResource(R.string.accounts_expand_all)) },
                                 onClick = {
                                     collapsedSections = emptySet()
                                     accountMenuExpanded = false
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Collapse all") },
+                                text = { Text(stringResource(R.string.accounts_collapse_all)) },
                                 onClick = {
-                                    collapsedSections = accountSections.mapTo(mutableSetOf()) { it.title }
+                                    collapsedSections = accountSections.mapTo(mutableSetOf()) { it.titleRes }
                                     accountMenuExpanded = false
                                 },
                             )
@@ -193,19 +195,19 @@ fun AccountsScreen(
         ) {
             item { AccountsSummary(accounts, transactions, onAllAccountsClick, hideDecimalPlaces, showMonthlySummary) }
             accountSections.forEach { section ->
-                val collapsed = section.title in collapsedSections
-                stickyHeader(key = "account-header-${section.title}") {
+                val collapsed = section.titleRes in collapsedSections
+                stickyHeader(key = "account-header-${section.titleRes}") {
                     AccountSectionHeader(
                         section = section,
                         collapsed = collapsed,
                         hideDecimalPlaces = hideDecimalPlaces,
                         onClick = {
-                            collapsedSections = if (collapsed) collapsedSections - section.title
-                            else collapsedSections + section.title
+                            collapsedSections = if (collapsed) collapsedSections - section.titleRes
+                            else collapsedSections + section.titleRes
                         },
                     )
                 }
-                itemsIndexed(section.accounts, key = { _, account -> "${section.title}-${account.name}" }) { index, account ->
+                itemsIndexed(section.accounts, key = { _, account -> "${section.titleRes}-${account.name}" }) { index, account ->
                     AnimatedVisibility(
                         visible = !collapsed,
                         enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { -it / 3 },
@@ -241,7 +243,7 @@ fun AccountsScreen(
     if (showAddSheet) NewAccountDialog(onDismiss = { showAddSheet = false }) { name, offBudget, balance, type ->
         onCreateAccount(name, offBudget, balance, type); showAddSheet = false
     }
-    renamingAccount?.let { account -> RenameDialog("Rename account", account.name,
+    renamingAccount?.let { account -> RenameDialog(stringResource(R.string.accounts_rename), account.name,
         onDismiss = { renamingAccount = null }, onSave = { name -> onRenameAccount(account, name); renamingAccount = null }) }
     changingTypeAccount?.let { account -> ChangeAccountTypeDialog(account.name, account.type,
         onDismiss = { changingTypeAccount = null },
@@ -275,10 +277,10 @@ private fun AccountsSummary(
     ) {
         Column(modifier = Modifier.padding(start = Spacing.screenHorizontal, top = Spacing.md, end = Spacing.md, bottom = Spacing.md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("All accounts", style = MaterialTheme.typography.titleMedium,
+                Text(stringResource(R.string.accounts_all), style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f))
                 MonetaryText(total, hideDecimalPlaces, style = AmountTypography.rowAmount.copy(fontWeight = FontWeight.Bold))
-                Icon(Icons.Outlined.ChevronRight, contentDescription = "View all transactions")
+                Icon(Icons.Outlined.ChevronRight, contentDescription = stringResource(R.string.accounts_view_all_transactions))
             }
             if (summary != null) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.md),
@@ -287,9 +289,9 @@ private fun AccountsSummary(
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    SummaryStat("Income", summary.incomeCents, hideDecimalPlaces = hideDecimalPlaces)
-                    SummaryStat("Expenses", summary.expenseCents, Alignment.CenterHorizontally, hideDecimalPlaces)
-                    SummaryStat("Net", summary.netCents, Alignment.End, hideDecimalPlaces,
+                    SummaryStat(stringResource(R.string.accounts_income), summary.incomeCents, hideDecimalPlaces = hideDecimalPlaces)
+                    SummaryStat(stringResource(R.string.accounts_expenses), summary.expenseCents, Alignment.CenterHorizontally, hideDecimalPlaces)
+                    SummaryStat(stringResource(R.string.accounts_net), summary.netCents, Alignment.End, hideDecimalPlaces,
                         Modifier.padding(end = Spacing.xl))
                 }
             }
@@ -312,6 +314,7 @@ private fun AccountSectionHeader(section: AccountSection, collapsed: Boolean,
     hideDecimalPlaces: Boolean, onClick: () -> Unit) {
     val rotation by animateFloatAsState(if (collapsed) -90f else 0f, tween(220), label = "account section")
     val total = section.accounts.sumOf { it.balanceCents }
+    val title = stringResource(section.titleRes)
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 1.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().combinedClickable(
@@ -320,9 +323,12 @@ private fun AccountSectionHeader(section: AccountSection, collapsed: Boolean,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Outlined.KeyboardArrowDown,
-                contentDescription = if (collapsed) "Expand ${section.title}" else "Collapse ${section.title}",
+                contentDescription = stringResource(
+                    if (collapsed) R.string.accounts_expand_section else R.string.accounts_collapse_section,
+                    title,
+                ),
                 modifier = Modifier.rotate(rotation))
-            Text(section.title, style = MaterialTheme.typography.titleSmall,
+            Text(title, style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f))
             MonetaryText(total, hideDecimalPlaces)
             // Match the space occupied by the account-row disclosure chevron.
@@ -341,6 +347,7 @@ private fun AccountRow(
     onLongClick: () -> Unit,
     hideDecimalPlaces: Boolean,
 ) {
+    val displayName = account.name.ifBlank { stringResource(R.string.common_unknown) }
     Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
         if (showTopDivider) {
             HorizontalDivider(
@@ -356,13 +363,14 @@ private fun AccountRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(account.name, style = MaterialTheme.typography.bodyMedium)
-                Text(creditCard?.let { "${it.cycle.dueShortSummary()} · Spend ${formatMoneyCents(it.cycleSpendCents, hideDecimalPlaces)}" }
-                    ?: account.type, style = MaterialTheme.typography.bodySmall,
+                Text(displayName, style = MaterialTheme.typography.bodyMedium)
+                Text(creditCard?.let {
+                    "${it.cycle.dueShortSummary()} · ${stringResource(R.string.accounts_spend, formatMoneyCents(it.cycleSpendCents, hideDecimalPlaces))}"
+                } ?: localizedAccountType(account.type), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             MonetaryText(account.balanceCents, hideDecimalPlaces)
-            Icon(Icons.Outlined.ChevronRight, contentDescription = "Open ${account.name}",
+            Icon(Icons.Outlined.ChevronRight, contentDescription = stringResource(R.string.accounts_open, displayName),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -380,14 +388,17 @@ private fun AccountActionsSheet(
     favorite: Boolean,
     onFavoriteChange: (Boolean) -> Unit,
 ) {
+    val displayName = account.name.ifBlank { stringResource(R.string.common_unknown) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
-            ActuaSheetTitle(account.name)
-            AccountSheetAction(if (favorite) "Remove from favorites" else "Add to favorites", onClick = { onFavoriteChange(!favorite) })
-            AccountSheetAction("View transactions", onViewTransactions)
-            AccountSheetAction("Rename account", onRename)
-            AccountSheetAction("Change account type", onChangeType)
-            AccountSheetAction(if (account.closed) "Reopen account" else "Close account", onClose, destructive = !account.closed)
+            ActuaSheetTitle(displayName)
+            AccountSheetAction(stringResource(if (favorite) R.string.accounts_remove_favorite else R.string.accounts_add_favorite),
+                onClick = { onFavoriteChange(!favorite) })
+            AccountSheetAction(stringResource(R.string.accounts_view_transactions), onViewTransactions)
+            AccountSheetAction(stringResource(R.string.accounts_rename), onRename)
+            AccountSheetAction(stringResource(R.string.accounts_change_type), onChangeType)
+            AccountSheetAction(stringResource(if (account.closed) R.string.accounts_reopen else R.string.accounts_close),
+                onClose, destructive = !account.closed)
         }
     }
 }
@@ -397,14 +408,26 @@ private fun AccountActionsSheet(
 private fun AddAccountSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(bottom = 28.dp)) {
-            ActuaSheetTitle("Add account")
-            AccountSheetAction("Bank account", onDismiss)
-            AccountSheetAction("Cash account", onDismiss)
-            AccountSheetAction("Credit card", onDismiss)
-            AccountSheetAction("Savings account", onDismiss)
-            AccountSheetAction("Off-budget account", onDismiss)
+            ActuaSheetTitle(stringResource(R.string.accounts_add))
+            AccountSheetAction(stringResource(R.string.accounts_bank_account), onDismiss)
+            AccountSheetAction(stringResource(R.string.accounts_cash_account), onDismiss)
+            AccountSheetAction(stringResource(R.string.accounts_credit_card), onDismiss)
+            AccountSheetAction(stringResource(R.string.accounts_savings_account), onDismiss)
+            AccountSheetAction(stringResource(R.string.accounts_off_budget_account), onDismiss)
         }
     }
+}
+
+@Composable
+private fun localizedAccountType(type: String): String = when (type) {
+    "Checking", "Bank" -> stringResource(R.string.account_type_checking)
+    "Savings" -> stringResource(R.string.account_type_savings)
+    "Credit" -> stringResource(R.string.account_type_credit)
+    "Investment" -> stringResource(R.string.account_type_investment)
+    "Mortgage" -> stringResource(R.string.account_type_mortgage)
+    "Debt", "Loan" -> stringResource(R.string.account_type_debt)
+    "Cash" -> stringResource(R.string.accounts_cash_account)
+    else -> type
 }
 
 @Composable

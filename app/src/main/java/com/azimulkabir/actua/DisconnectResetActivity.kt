@@ -1,8 +1,8 @@
 package com.azimulkabir.actua
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
@@ -13,6 +13,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.azimulkabir.actua.data.budget.ActiveBudgetStore
@@ -27,6 +28,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private class DisconnectUserException(val userMessage: String) : Exception()
+
 /**
  * Confirmation surface for a deliberate server disconnect.
  *
@@ -34,7 +37,7 @@ import kotlinx.coroutines.withContext
  * recreating the application task after the reset. A final sync protects normal
  * Actual data plus Actua-specific CRDT preferences such as credit-card metadata.
  */
-class DisconnectResetActivity : ComponentActivity() {
+class DisconnectResetActivity : AppCompatActivity() {
     private enum class Stage { Confirm, Syncing, SyncFailed }
 
     private var stage by mutableStateOf(Stage.Confirm)
@@ -50,27 +53,29 @@ class DisconnectResetActivity : ComponentActivity() {
                 when (stage) {
                     Stage.Confirm -> AlertDialog(
                         onDismissRequest = ::cancelAndRestore,
-                        title = { Text("Disconnect & reset?") },
+                        title = { Text(stringResource(R.string.disconnect_reset_title)) },
                         text = {
-                            Text(
-                                "Actua will sync every downloaded server budget, then remove downloaded server budgets, local backups, encryption keys, and connection data from this device. Your budgets on the Actual server will not be deleted. Device display settings and the local demo budget will be kept."
-                            )
+                            Text(stringResource(R.string.disconnect_reset_message))
                         },
                         confirmButton = {
-                            TextButton(onClick = ::syncThenReset) { Text("Disconnect & reset") }
+                            TextButton(onClick = ::syncThenReset) {
+                                Text(stringResource(R.string.disconnect_reset_action))
+                            }
                         },
                         dismissButton = {
-                            TextButton(onClick = ::cancelAndRestore) { Text("Cancel") }
+                            TextButton(onClick = ::cancelAndRestore) {
+                                Text(stringResource(R.string.widget_action_cancel))
+                            }
                         },
                     )
 
                     Stage.Syncing -> AlertDialog(
                         onDismissRequest = {},
-                        title = { Text("Syncing before disconnect") },
+                        title = { Text(stringResource(R.string.disconnect_syncing_title)) },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 CircularProgressIndicator()
-                                Text("Saving the latest Actual and Actua changes from every downloaded server budget before local data is removed.")
+                                Text(stringResource(R.string.disconnect_syncing_message))
                             }
                         },
                         confirmButton = {},
@@ -78,10 +83,10 @@ class DisconnectResetActivity : ComponentActivity() {
 
                     Stage.SyncFailed -> AlertDialog(
                         onDismissRequest = ::cancelAndRestore,
-                        title = { Text("Couldn’t sync latest changes") },
+                        title = { Text(stringResource(R.string.disconnect_sync_failed_title)) },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Actua did not remove any local budget data. Disconnecting anyway may permanently discard changes that have not reached your Actual server.")
+                                Text(stringResource(R.string.disconnect_sync_failed_message))
                                 syncFailure?.takeIf { it.isNotBlank() }?.let {
                                     Text(it, style = MaterialTheme.typography.bodySmall)
                                 }
@@ -89,11 +94,16 @@ class DisconnectResetActivity : ComponentActivity() {
                         },
                         confirmButton = {
                             TextButton(onClick = ::forceReset) {
-                                Text("Disconnect anyway", color = MaterialTheme.colorScheme.error)
+                                Text(
+                                    stringResource(R.string.disconnect_anyway),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
                             }
                         },
                         dismissButton = {
-                            TextButton(onClick = ::syncThenReset) { Text("Try again") }
+                            TextButton(onClick = ::syncThenReset) {
+                                Text(stringResource(R.string.disconnect_try_again))
+                            }
                         },
                     )
                 }
@@ -111,7 +121,8 @@ class DisconnectResetActivity : ComponentActivity() {
             }
             result.onSuccess { resetAndRestart() }
                 .onFailure { error ->
-                    syncFailure = error.message ?: "Sync failed."
+                    syncFailure = (error as? DisconnectUserException)?.userMessage
+                        ?: getString(R.string.disconnect_error_sync_failed)
                     stage = Stage.SyncFailed
                 }
         }
@@ -126,13 +137,22 @@ class DisconnectResetActivity : ComponentActivity() {
         try {
             budgets.forEach { budget ->
                 if (budget.cloudFileId.isNullOrBlank()) {
-                    error("${budget.budgetName ?: budget.id} has no server identity and cannot be safely removed after sync.")
+                    throw DisconnectUserException(getString(
+                        R.string.disconnect_error_missing_server_identity,
+                        budget.budgetName ?: budget.id,
+                    ))
                 }
                 activeStore.budgetId = budget.id
                 when (ActualSyncRunner.run(this)) {
                     is SyncRunResult.Success -> Unit
-                    SyncRunResult.NotConfigured -> error("${budget.budgetName ?: budget.id} is not configured for server sync.")
-                    SyncRunResult.EncryptionKeyUnavailable -> error("${budget.budgetName ?: budget.id} is encrypted and locked. Unlock it before disconnecting, or disconnect anyway.")
+                    SyncRunResult.NotConfigured -> throw DisconnectUserException(getString(
+                        R.string.disconnect_error_not_configured,
+                        budget.budgetName ?: budget.id,
+                    ))
+                    SyncRunResult.EncryptionKeyUnavailable -> throw DisconnectUserException(getString(
+                        R.string.disconnect_error_encryption_locked,
+                        budget.budgetName ?: budget.id,
+                    ))
                 }
             }
         } finally {
@@ -153,8 +173,8 @@ class DisconnectResetActivity : ComponentActivity() {
             }.onSuccess {
                 DisconnectResetManager(this@DisconnectResetActivity).restartIntoFreshConnectionState()
                 finish()
-            }.onFailure { error ->
-                syncFailure = error.message ?: "Could not reset local Actua data."
+            }.onFailure {
+                syncFailure = getString(R.string.disconnect_error_reset_failed)
                 stage = Stage.SyncFailed
             }
         }

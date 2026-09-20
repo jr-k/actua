@@ -1,5 +1,7 @@
 package com.azimulkabir.actua.model
 
+import androidx.annotation.StringRes
+import com.azimulkabir.actua.R
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -68,20 +70,18 @@ data class BudgetTarget(
     val limitStartDate: String? = null,
     val limitHold: Boolean = false,
 ) {
-    enum class Type(val label: String, val explanation: String) {
-        FIXED("Fixed amount", "Add a set amount every month, week, day, or year."),
-        SCHEDULE("Cover schedule", "Save up for a scheduled transaction."),
-        BY_DATE("Save by date", "Spread a target amount across the months until a deadline."),
-        PERCENTAGE("% of income", "A share of this month's or last month's income."),
-        HISTORICAL("From history", "Use past months: average, a specific month, or a copy."),
-        REFILL("Refill to cap", "Top the category back up to the balance cap each month."),
-        REMAINDER("Whatever is left", "Split any remaining To Budget across these categories."),
-        LIMIT("Balance cap", "Stop budgeting to this category once the balance reaches a cap."),
+    enum class Type(@StringRes val labelRes: Int, @StringRes val explanationRes: Int) {
+        FIXED(R.string.target_fixed_label, R.string.target_fixed_explanation),
+        SCHEDULE(R.string.target_schedule_label, R.string.target_schedule_explanation),
+        BY_DATE(R.string.target_by_date_label, R.string.target_by_date_explanation),
+        PERCENTAGE(R.string.target_percentage_label, R.string.target_percentage_explanation),
+        HISTORICAL(R.string.target_history_label, R.string.target_history_explanation),
+        REFILL(R.string.target_refill_label, R.string.target_refill_explanation),
+        REMAINDER(R.string.target_remainder_label, R.string.target_remainder_explanation),
+        LIMIT(R.string.target_limit_label, R.string.target_limit_explanation),
         GOAL(
-            "Long-term goal",
-            "Set a long-term savings target. This changes the coloring of the balance on the " +
-                "budget page to be based on progress towards the target rather than the current " +
-                "month funding progress.",
+            R.string.target_goal_label,
+            R.string.target_goal_explanation,
         );
 
         /** Balance cap and long-term goal are standalone "Options", not automation types. */

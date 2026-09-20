@@ -48,7 +48,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -56,8 +59,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.network.ActualServerClient
 import com.azimulkabir.actua.data.network.ActualServerException
+import com.azimulkabir.actua.data.network.OidcCallbackPageText
 import com.azimulkabir.actua.data.network.OidcCallbackServer
 import com.azimulkabir.actua.data.network.RemoteBudgetFile
 import com.azimulkabir.actua.data.network.ServerCertificateInfo
@@ -74,6 +79,11 @@ import com.azimulkabir.actua.data.budget.DemoBudgetManager
 import com.azimulkabir.actua.data.security.BudgetEncryptionKeyStore
 import com.azimulkabir.actua.data.security.CredentialStore
 import com.azimulkabir.actua.data.sync.ActualSyncRunner
+import com.azimulkabir.actua.data.sync.SYNC_TRIGGER_AFTER_CHANGE
+import com.azimulkabir.actua.data.sync.SYNC_TRIGGER_APP_OPEN
+import com.azimulkabir.actua.data.sync.SYNC_TRIGGER_BACKGROUND
+import com.azimulkabir.actua.data.sync.SYNC_TRIGGER_MANUAL
+import com.azimulkabir.actua.data.sync.SyncErrorCode
 import com.azimulkabir.actua.data.sync.SyncRunResult
 import com.azimulkabir.actua.data.sync.SyncStatusStore
 import com.azimulkabir.actua.ui.components.ActuaScreenHeader
@@ -82,6 +92,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import java.util.Locale
 
 private data class PendingOpenIdLogin(
     val primaryUrl: String,
@@ -107,10 +118,34 @@ private data class CompletedOpenIdLogin(
     val budgets: List<RemoteBudgetFile>,
 )
 
-internal fun formatSyncDuration(durationMillis: Long): String = when {
+internal fun formatSyncDuration(durationMillis: Long, locale: Locale = Locale.getDefault()): String = when {
     durationMillis < 1_000L -> "$durationMillis ms"
-    else -> String.format(java.util.Locale.US, "%.1f s", durationMillis / 1_000.0)
+    else -> String.format(locale, "%.1f s", durationMillis / 1_000.0)
 }
+
+@Composable
+private fun syncTriggerDisplayName(trigger: String): String = stringResource(when (trigger) {
+    SYNC_TRIGGER_MANUAL, "Manual", "Manuelle", "Sync" -> R.string.sync_trigger_manual
+    SYNC_TRIGGER_AFTER_CHANGE, "After change", "Après modification" -> R.string.sync_trigger_after_change
+    SYNC_TRIGGER_APP_OPEN, "App open", "Ouverture de l’application" -> R.string.sync_trigger_app_open
+    SYNC_TRIGGER_BACKGROUND, "Background", "Arrière-plan" -> R.string.sync_trigger_background
+    else -> R.string.sync_trigger_background
+})
+
+@Composable
+private fun syncErrorDisplayMessage(error: String): String = stringResource(when (error) {
+    SyncErrorCode.ENCRYPTION_KEY_UNAVAILABLE.persistedValue,
+    "Unlock this encrypted budget before syncing" -> R.string.unlock_budget_before_sync
+    SyncErrorCode.UNAUTHORIZED.persistedValue, "Unauthorized" -> R.string.sync_error_unauthorized
+    SyncErrorCode.CERTIFICATE.persistedValue -> R.string.sync_error_certificate
+    SyncErrorCode.NETWORK.persistedValue -> R.string.sync_error_network
+    SyncErrorCode.OUT_OF_SYNC.persistedValue, "Unable to converge with the server" -> R.string.sync_error_out_of_sync
+    SyncErrorCode.CLOCK.persistedValue -> R.string.sync_error_clock
+    SyncErrorCode.INVALID_SERVER_RESPONSE.persistedValue,
+    "The server returned an invalid response" -> R.string.sync_error_invalid_response
+    SyncErrorCode.SERVER_REQUEST.persistedValue -> R.string.sync_error_server_request
+    else -> R.string.sync_error_unknown
+})
 
 /**
  * The raw exception message for an untrusted server certificate is a cryptic Java stack-trace
@@ -136,13 +171,11 @@ internal fun isCertificateTrustFailure(error: Throwable): Boolean {
         }
 }
 
-internal fun connectionErrorMessage(error: Throwable, fallback: String): String {
+internal fun connectionErrorMessage(error: Throwable, fallback: String, certificateTrustMessage: String = fallback): String {
     return if (isCertificateTrustFailure(error)) {
-        "Server certificate isn't trusted. Actua couldn't verify this server's TLS certificate. " +
-            "Check that the server provides a valid certificate chain. If you use a private or " +
-            "self-signed CA, install that CA as a trusted certificate on this device."
+        certificateTrustMessage
     } else {
-        error.message ?: fallback
+        fallback
     }
 }
 
@@ -170,7 +203,7 @@ internal fun ManualSyncButtonContent(
                     strokeWidth = 2.dp,
                 )
             }
-            Text(if (demoActive) "Demo is local only" else if (syncing) "Syncing…" else "Sync now")
+            Text(stringResource(if (demoActive) R.string.demo_local_only else if (syncing) R.string.syncing else R.string.sync_now))
         }
     }
 }
@@ -183,6 +216,8 @@ fun ConnectionScreen(
     onBudgetInstalled: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
+    val configuration = LocalConfiguration.current
     val credentials = remember { CredentialStore(context) }
     val certificateStore = remember { TrustedCertificateStore(context) }
     val client = remember {
@@ -244,16 +279,16 @@ fun ConnectionScreen(
                 }
             } }.onSuccess { (usedUrl, budgets) ->
                 activeServerUrl = usedUrl; remoteBudgets = budgets
-                message = if (budgets.isEmpty()) "No budgets found." else null
+                message = if (budgets.isEmpty()) resources.getString(R.string.no_budgets_found) else null
             }
-                .onFailure { message = connectionErrorMessage(it, "Could not load budgets.") }
+                .onFailure { message = connectionErrorMessage(it, resources.getString(R.string.could_not_load_budgets), resources.getString(R.string.server_certificate_not_trusted_error)) }
             loading = false
         }
     }
 
     fun requestCertificateTrust(error: Throwable, action: CertificateRetryAction) {
         if (!isCertificateTrustFailure(error)) {
-            message = connectionErrorMessage(error, "Could not connect to the server.")
+            message = connectionErrorMessage(error, resources.getString(R.string.could_not_connect_server), resources.getString(R.string.server_certificate_not_trusted_error))
             return
         }
         scope.launch {
@@ -269,8 +304,8 @@ fun ConnectionScreen(
                     replacingExistingTrust = certificateStore.hasTrust(info.host),
                 )
                 message = null
-            }.onFailure { inspectionError ->
-                message = inspectionError.message ?: connectionErrorMessage(error, "Could not inspect the server certificate.")
+            }.onFailure {
+                message = resources.getString(R.string.could_not_inspect_certificate)
             }
         }
     }
@@ -296,13 +331,15 @@ fun ConnectionScreen(
                 activeServerUrl = url
                 password = ""
                 connected = true
-                message = "Connected"
+                message = resources.getString(R.string.connected)
                 loadBudgets()
             }.onFailure { error ->
                 if (isCertificateTrustFailure(error)) {
                     requestCertificateTrust(error, CertificateRetryAction.PASSWORD)
+                } else if (error.message == "Incorrect server password.") {
+                    message = resources.getString(R.string.incorrect_server_password)
                 } else {
-                    message = connectionErrorMessage(error, "Could not connect to the server.")
+                    message = connectionErrorMessage(error, resources.getString(R.string.could_not_connect_server), resources.getString(R.string.server_certificate_not_trusted_error))
                 }
             }
             loading = false
@@ -311,7 +348,7 @@ fun ConnectionScreen(
 
     fun connectWithOpenId() {
         loading = true
-        message = "Preparing OpenID sign-in…"
+        message = resources.getString(R.string.preparing_openid)
         scope.launch {
             var callbackServer: OidcCallbackServer? = null
             runCatching {
@@ -331,11 +368,20 @@ fun ConnectionScreen(
                             activeUrl = candidate
                             break
                         }
-                        lastError = IllegalStateException("This Actual server does not offer OpenID sign-in.")
+                        lastError = IllegalStateException(resources.getString(R.string.openid_not_offered))
                     }
                     val selectedUrl = activeUrl ?: throw (lastError
-                        ?: IllegalStateException("Could not find an OpenID-enabled Actual server."))
-                    val callback = OidcCallbackServer()
+                        ?: IllegalStateException(resources.getString(R.string.could_not_find_openid_server)))
+                    val callback = OidcCallbackServer(
+                        OidcCallbackPageText(
+                            languageTag = configuration.locales[0].toLanguageTag(),
+                            completionTitle = resources.getString(R.string.openid_completion_title),
+                            completionMessage = resources.getString(R.string.openid_completion_message),
+                            returnToApp = resources.getString(R.string.openid_return_to_app),
+                            callbackErrorTitle = resources.getString(R.string.openid_callback_error_title),
+                            callbackErrorMessage = resources.getString(R.string.openid_callback_error_message),
+                        ),
+                    )
                     callbackServer = callback
                     val authorizationUrl = client.startOpenIdLogin(selectedUrl, callback.returnUrl, password)
                     PendingOpenIdLogin(primary, fallback, selectedUrl, authorizationUrl, callback)
@@ -343,7 +389,7 @@ fun ConnectionScreen(
 
                 val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(pending.authorizationUrl))
                 context.startActivity(browserIntent)
-                message = "Complete sign-in in your browser, then return to Actua."
+                message = resources.getString(R.string.complete_sign_in_browser)
 
                 val token = withContext(Dispatchers.IO) { pending.callbackServer.awaitToken() }
                 val budgets = withContext(Dispatchers.IO) { client.listFiles(pending.activeUrl, token) }
@@ -363,16 +409,16 @@ fun ConnectionScreen(
                 remoteBudgets = result.budgets
                 password = ""
                 connected = true
-                message = if (result.budgets.isEmpty()) "Connected with OpenID. No budgets found." else "Connected with OpenID"
+                message = resources.getString(if (result.budgets.isEmpty()) R.string.connected_openid_no_budgets else R.string.connected_openid)
             }.onFailure { error ->
                 message = when (error.message) {
-                    "invalid-password" -> "Actual requires the current server password for this first OpenID sign-in. Enter it above and try again."
+                    "invalid-password" -> resources.getString(R.string.openid_current_password_required)
                     else -> {
                         if (isCertificateTrustFailure(error)) {
                             requestCertificateTrust(error, CertificateRetryAction.OPEN_ID)
                             null
                         } else {
-                            connectionErrorMessage(error, "Could not complete OpenID sign-in.")
+                            connectionErrorMessage(error, resources.getString(R.string.could_not_complete_openid), resources.getString(R.string.server_certificate_not_trusted_error))
                         }
                     }
                 }
@@ -392,9 +438,9 @@ fun ConnectionScreen(
                 .onSuccess { metadata ->
                     activeBudget.budgetId = metadata.id
                     message = if (previousBudgetId == metadata.id) {
-                        "Demo budget reset to its original sample data."
+                        resources.getString(R.string.demo_budget_reset)
                     } else {
-                        "Demo budget opened. Nothing in it is uploaded or synced."
+                        resources.getString(R.string.demo_budget_opened)
                     }
                     onBudgetInstalled()
                     refreshBackups()
@@ -403,7 +449,7 @@ fun ConnectionScreen(
                     if (previousBudgetId == DemoBudgetManager.BUDGET_ID && !files.databaseFile(DemoBudgetManager.BUDGET_ID).isFile) {
                         activeBudget.budgetId = files.listLocalBudgets().firstOrNull { it.id != DemoBudgetManager.BUDGET_ID }?.id
                     }
-                    message = error.message ?: "Could not create the demo budget."
+                    message = resources.getString(R.string.could_not_create_demo_budget)
                     onBudgetInstalled()
                 }
             loading = false
@@ -414,13 +460,13 @@ fun ConnectionScreen(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (granted) connectWithPassword()
-        else message = "Local network access is required because this server resolves to a private network address."
+        else message = resources.getString(R.string.local_network_required)
     }
     val localNetworkOpenIdPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (granted) connectWithOpenId()
-        else message = "Local network access is required because this server resolves to a private network address."
+        else message = resources.getString(R.string.local_network_required)
     }
 
     LaunchedEffect(headerEntries) { client.customHeaders = headerEntries.toMap() }
@@ -450,25 +496,25 @@ fun ConnectionScreen(
         AlertDialog(
             onDismissRequest = { pendingCertificateTrust = null },
             title = {
-                Text(if (pending.replacingExistingTrust) "Server certificate changed" else "Server certificate isn't trusted")
+                Text(stringResource(if (pending.replacingExistingTrust) R.string.server_certificate_changed else R.string.server_certificate_untrusted))
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         if (pending.replacingExistingTrust) {
-                            "The certificate presented by this server is different from the one you previously trusted. Verify the new fingerprint before continuing."
+                            stringResource(R.string.server_certificate_changed_description)
                         } else {
-                            "Actua can't verify this server with Android's trusted certificate authorities. Only continue if you recognize this server and have verified its fingerprint."
+                            stringResource(R.string.server_certificate_untrusted_description)
                         },
                     )
-                    Text("Host: ${pending.info.host}", fontWeight = FontWeight.SemiBold)
-                    Text("Issuer: ${pending.info.issuer}", style = MaterialTheme.typography.bodySmall)
-                    Text("Valid from: ${pending.info.validFrom}", style = MaterialTheme.typography.bodySmall)
-                    Text("Valid until: ${pending.info.validUntil}", style = MaterialTheme.typography.bodySmall)
-                    Text("SHA-256 fingerprint", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.certificate_host, pending.info.host), fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.certificate_issuer, pending.info.issuer), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.certificate_valid_from, pending.info.validFrom), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.certificate_valid_until, pending.info.validUntil), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.sha256_fingerprint), fontWeight = FontWeight.SemiBold)
                     Text(pending.info.sha256Fingerprint, style = MaterialTheme.typography.bodySmall)
                     Text(
-                        "This trust applies only to ${pending.info.host} in Actua. Hostname verification remains enabled.",
+                        stringResource(R.string.certificate_trust_scope, pending.info.host),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -482,26 +528,26 @@ fun ConnectionScreen(
                         CertificateRetryAction.PASSWORD -> connectWithPassword()
                         CertificateRetryAction.OPEN_ID -> connectWithOpenId()
                     }
-                }) { Text(if (pending.replacingExistingTrust) "Trust new certificate" else "Trust certificate") }
+                }) { Text(stringResource(if (pending.replacingExistingTrust) R.string.trust_new_certificate else R.string.trust_certificate)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingCertificateTrust = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingCertificateTrust = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
 
     if (showAddHeader) AlertDialog(
         onDismissRequest = { showAddHeader = false; headerNameInput = ""; headerValueInput = "" },
-        title = { Text("Add HTTP header") },
+        title = { Text(stringResource(R.string.add_http_header)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = headerNameInput, onValueChange = { headerNameInput = it },
-                    label = { Text("Header name") }, placeholder = { Text("CF-Access-Client-Id") }, singleLine = true,
+                    label = { Text(stringResource(R.string.header_name)) }, placeholder = { Text(stringResource(R.string.header_name_example)) }, singleLine = true,
                 )
                 OutlinedTextField(
                     value = headerValueInput, onValueChange = { headerValueInput = it },
-                    label = { Text("Header value") }, singleLine = true,
+                    label = { Text(stringResource(R.string.header_value)) }, singleLine = true,
                 )
             }
         },
@@ -512,18 +558,18 @@ fun ConnectionScreen(
                 headerEntries = headerEntries.filterNot { it.first.equals(name, ignoreCase = true) } + (name to headerValueInput.trim())
                 showAddHeader = false; headerNameInput = ""; headerValueInput = ""
             },
-        ) { Text("Add") } },
-        dismissButton = { TextButton(onClick = { showAddHeader = false; headerNameInput = ""; headerValueInput = "" }) { Text("Cancel") } },
+        ) { Text(stringResource(R.string.add)) } },
+        dismissButton = { TextButton(onClick = { showAddHeader = false; headerNameInput = ""; headerValueInput = "" }) { Text(stringResource(R.string.cancel)) } },
     )
 
     if (showCreateBudget) AlertDialog(
         onDismissRequest = { if (!loading) showCreateBudget = false },
-        title = { Text("Create new budget") },
+        title = { Text(stringResource(R.string.create_new_budget)) },
         text = { OutlinedTextField(
             value = newBudgetName,
             onValueChange = { if (it.length <= 100) newBudgetName = it },
-            label = { Text("Budget name") },
-            supportingText = { Text("Creates an empty budget on the server and opens it here.") },
+            label = { Text(stringResource(R.string.budget_name)) },
+            supportingText = { Text(stringResource(R.string.create_budget_description)) },
             singleLine = true,
         ) },
         confirmButton = { TextButton(
@@ -531,7 +577,7 @@ fun ConnectionScreen(
             onClick = {
                 val name = newBudgetName.trim()
                 val existingNames = remoteBudgets.map { it.name } + files.listLocalBudgets().mapNotNull { it.budgetName }
-                if (name in existingNames) { message = "“$name” already exists."; return@TextButton }
+                if (name in existingNames) { message = resources.getString(R.string.name_already_exists, name); return@TextButton }
                 loading = true; message = null
                 scope.launch {
                     var localId: String? = null
@@ -552,28 +598,28 @@ fun ConnectionScreen(
                     } }.onSuccess { id ->
                         onBeforeBudgetReplacement(); activeBudget.budgetId = id
                         showCreateBudget = false; newBudgetName = ""
-                        message = "$name created and opened."; onBudgetInstalled(); loadBudgets(); refreshBackups()
+                        message = resources.getString(R.string.budget_created_opened, name); onBudgetInstalled(); loadBudgets(); refreshBackups()
                     }.onFailure { error ->
                         localId?.let { runCatching { files.deleteBudget(it) } }
-                        message = error.message ?: "Could not create budget."
+                        message = resources.getString(R.string.could_not_create_budget)
                     }
                     loading = false
                 }
             },
-        ) { Text("Create") } },
-        dismissButton = { TextButton(enabled = !loading, onClick = { showCreateBudget = false }) { Text("Cancel") } },
+        ) { Text(stringResource(R.string.create)) } },
+        dismissButton = { TextButton(enabled = !loading, onClick = { showCreateBudget = false }) { Text(stringResource(R.string.cancel)) } },
     )
 
     pendingDelete?.let { remote ->
         AlertDialog(
             onDismissRequest = { if (!loading) pendingDelete = null },
-            title = { Text("Delete ${remote.name}?") },
+            title = { Text(stringResource(R.string.delete_named_budget, remote.name)) },
             text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("This permanently deletes the budget from the server and every client. Unsynced local changes may be lost.")
+                Text(stringResource(R.string.delete_budget_warning))
                 OutlinedTextField(
                     value = deleteConfirmation,
                     onValueChange = { deleteConfirmation = it },
-                    label = { Text("Type ${remote.name} to confirm") },
+                    label = { Text(stringResource(R.string.type_name_to_confirm, remote.name)) },
                     singleLine = true,
                 )
             } },
@@ -596,45 +642,45 @@ fun ConnectionScreen(
                                 activeBudget.budgetId = remaining.firstOrNull()?.id
                             }
                             pendingDelete = null; deleteConfirmation = ""
-                            message = "${remote.name} deleted."; loadBudgets(); refreshBackups(); onBudgetInstalled()
+                            message = resources.getString(R.string.budget_deleted, remote.name); loadBudgets(); refreshBackups(); onBudgetInstalled()
                         }.onFailure { error ->
-                            message = error.message ?: "Could not delete budget."; onBudgetInstalled()
+                            message = resources.getString(R.string.could_not_delete_budget); onBudgetInstalled()
                         }
                         loading = false
                     }
                 },
-            ) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(enabled = !loading, onClick = { pendingDelete = null }) { Text("Cancel") } },
+            ) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(enabled = !loading, onClick = { pendingDelete = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     if (confirmQuickBackup) AlertDialog(
         onDismissRequest = { confirmQuickBackup = false },
-        title = { Text("Create a new backup?") },
-        text = { Text("This replaces the one-tap pre-restore version. The restored budget remains in the normal backup list.") },
+        title = { Text(stringResource(R.string.create_new_backup_title)) },
+        text = { Text(stringResource(R.string.quick_backup_description)) },
         confirmButton = { TextButton(onClick = {
             confirmQuickBackup = false
             val budgetId = activeBudget.budgetId ?: return@TextButton
             backupBusy = true
             scope.launch {
                 runCatching { withContext(Dispatchers.IO) { backupService.makeBackup(budgetId) } }
-                    .onSuccess { message = "Backup created." }
-                    .onFailure { message = it.message ?: "Could not create a backup." }
+                    .onSuccess { message = resources.getString(R.string.backup_created) }
+                    .onFailure { message = resources.getString(R.string.could_not_create_a_backup) }
                 backupBusy = false; refreshBackups()
             }
-        }) { Text("Back up") } },
-        dismissButton = { TextButton(onClick = { confirmQuickBackup = false }) { Text("Cancel") } },
+        }) { Text(stringResource(R.string.back_up)) } },
+        dismissButton = { TextButton(onClick = { confirmQuickBackup = false }) { Text(stringResource(R.string.cancel)) } },
     )
 
     Column(modifier = modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Connection & data", onBack = onBack)
+        ActuaScreenHeader(title = stringResource(R.string.connection_data_title), onBack = onBack)
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Try Actua", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.try_actua), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
                 if (demoActive) {
-                    "You are using the local demo budget. Reset it any time to restore the original sample accounts, transactions, targets, rules, schedules and reports."
+                    stringResource(R.string.demo_budget_active_description)
                 } else {
-                    "Explore Actua with realistic sample accounts, transactions, credit-card activity, targets, rules, schedules and reports. No server or account is required."
+                    stringResource(R.string.demo_budget_description)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -645,34 +691,34 @@ fun ConnectionScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (loading) CircularProgressIndicator(Modifier.padding(end = 8.dp))
-                Text(if (demoActive) "Reset demo budget" else "Try demo budget")
+                Text(stringResource(if (demoActive) R.string.reset_demo_budget else R.string.try_demo_budget))
             }
             Text(
-                "The demo stays on this device and has no cloud file ID, encryption key or sync registration. It cannot change a server budget.",
+                stringResource(R.string.demo_local_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Connection", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                Text(stringResource(R.string.connection), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f))
-                if (connected && !editingConnection) TextButton(onClick = { editingConnection = true }) { Text("Edit") }
+                if (connected && !editingConnection) TextButton(onClick = { editingConnection = true }) { Text(stringResource(R.string.edit)) }
             }
             OutlinedTextField(
-                value = serverUrl, onValueChange = { serverUrl = it }, label = { Text("Server URL") },
-                placeholder = { Text("https://actual.example.com") }, singleLine = true,
+                value = serverUrl, onValueChange = { serverUrl = it }, label = { Text(stringResource(R.string.server_url)) },
+                placeholder = { Text(stringResource(R.string.server_url_example)) }, singleLine = true,
                 enabled = (!connected || editingConnection) && !loading, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             )
             OutlinedTextField(
                 value = fallbackServerUrl, onValueChange = { fallbackServerUrl = it },
-                label = { Text("Fallback server URL (optional)") },
-                placeholder = { Text("https://actual-local.example.com") }, singleLine = true,
+                label = { Text(stringResource(R.string.fallback_server_url)) },
+                placeholder = { Text(stringResource(R.string.fallback_server_url_example)) }, singleLine = true,
                 enabled = (!connected || editingConnection) && !loading, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             )
             if (!connected || editingConnection) {
-                Text("Custom HTTP headers (optional)", style = MaterialTheme.typography.labelLarge,
+                Text(stringResource(R.string.custom_http_headers), style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 headerEntries.forEachIndexed { index, (name, value) ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -685,26 +731,26 @@ fun ConnectionScreen(
                         IconButton(
                             enabled = !loading,
                             onClick = { headerEntries = headerEntries.filterIndexed { i, _ -> i != index } },
-                        ) { Icon(Icons.Outlined.Delete, contentDescription = "Remove $name header") }
+                        ) { Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.remove_named_header, name)) }
                     }
                 }
                 OutlinedButton(
                     onClick = { showAddHeader = true }, enabled = !loading, modifier = Modifier.fillMaxWidth(),
-                ) { Text("Add header") }
+                ) { Text(stringResource(R.string.add_header)) }
                 Text(
-                    "Sent with every request to this server, such as Cloudflare Access service-token headers.",
+                    stringResource(R.string.custom_headers_description),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (!connected) {
                 OutlinedTextField(
-                    value = password, onValueChange = { password = it }, label = { Text("Server password") },
+                    value = password, onValueChange = { password = it }, label = { Text(stringResource(R.string.server_password)) },
                     singleLine = true, enabled = !loading, modifier = Modifier.fillMaxWidth(),
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                                contentDescription = if (passwordVisible) "Hide password" else "Show password")
+                                contentDescription = stringResource(if (passwordVisible) R.string.hide_password else R.string.show_password))
                         }
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -724,7 +770,7 @@ fun ConnectionScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (loading) CircularProgressIndicator(modifier = Modifier.padding(end = 10.dp))
-                    Text(if (loading) "Connecting…" else "Connect with password")
+                    Text(stringResource(if (loading) R.string.connecting else R.string.connect_with_password))
                 }
                 OutlinedButton(
                     onClick = {
@@ -740,22 +786,22 @@ fun ConnectionScreen(
                     enabled = serverUrl.isNotBlank() && !loading,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Sign in with OpenID")
+                    Text(stringResource(R.string.sign_in_openid))
                 }
                 Text(
-                    "OpenID Connect sign-in opens your browser and returns the Actual session securely to this device. If Actual reports invalid-password on the first OpenID login, enter the current server password above and retry.",
+                    stringResource(R.string.openid_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                Text("● Connected", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.connected_indicator), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                 if (editingConnection) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(onClick = {
                         serverUrl = credentials.serverUrl
                         fallbackServerUrl = credentials.fallbackServerUrl
                         headerEntries = credentials.customHeaders.toList()
                         editingConnection = false
-                    }, modifier = Modifier.weight(1f)) { Text("Cancel") }
+                    }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.cancel)) }
                     Button(onClick = {
                         loading = true; message = null
                         scope.launch {
@@ -768,11 +814,11 @@ fun ConnectionScreen(
                                 credentials.updateServerUrls(primary, fallback)
                                 credentials.customHeaders = headerEntries.toMap()
                                 serverUrl = primary; fallbackServerUrl = fallback; activeServerUrl = primary
-                                editingConnection = false; message = "Server addresses updated. Downloaded budgets were kept."
-                            }.onFailure { message = it.message ?: "Could not reach the new primary server." }
+                                editingConnection = false; message = resources.getString(R.string.server_addresses_updated)
+                            }.onFailure { message = resources.getString(R.string.could_not_reach_primary_server) }
                             loading = false
                         }
-                    }, enabled = serverUrl.isNotBlank() && !loading, modifier = Modifier.weight(1f)) { Text("Save") }
+                    }, enabled = serverUrl.isNotBlank() && !loading, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.save)) }
                 }
                 OutlinedButton(onClick = {
                     listOf(serverUrl, fallbackServerUrl).filter(String::isNotBlank).forEach { url ->
@@ -782,97 +828,102 @@ fun ConnectionScreen(
                     credentials.clear()
                     connected = false
                     remoteBudgets = emptyList()
-                    message = "Disconnected"
-                }, modifier = Modifier.fillMaxWidth()) { Text("Disconnect") }
+                    message = resources.getString(R.string.disconnected)
+                }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.disconnect)) }
             }
             message?.let {
                 Text(it, color = if (connected || demoActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             }
-            Text("Your token is encrypted with Android Keystore and remains on this device.",
+            Text(stringResource(R.string.token_security_description),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             if (connected) {
-                Text("Sync", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.sync), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 if (demoActive) {
                     Text(
-                        "Demo budget is local only. Select a downloaded server budget to sync.",
+                        stringResource(R.string.demo_sync_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Row(Modifier.fillMaxWidth()) {
-                    Text("Status", Modifier.weight(1f))
+                    Text(stringResource(R.string.status), Modifier.weight(1f))
                     Text(if (syncStatus.running || syncing) {
-                        syncStatus.activeTrigger?.let { "Syncing · $it" } ?: "Syncing"
-                    } else if (syncStatus.error != null) "Error" else "Idle",
+                        syncStatus.activeTrigger?.let {
+                            stringResource(R.string.syncing_trigger, syncTriggerDisplayName(it))
+                        } ?: stringResource(R.string.syncing_plain)
+                    } else if (syncStatus.error != null) stringResource(R.string.error) else stringResource(R.string.idle),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row(Modifier.fillMaxWidth()) {
-                    Text("Last sync", Modifier.weight(1f))
-                    Text(syncStatus.lastSuccessMillis.takeIf { it > 0 }?.let(::relativeTime) ?: "Never",
+                    Text(stringResource(R.string.last_sync), Modifier.weight(1f))
+                    Text(syncStatus.lastSuccessMillis.takeIf { it > 0 }?.let { relativeTime(it) } ?: stringResource(R.string.never),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row(Modifier.fillMaxWidth()) {
-                    Text("Last app-open refresh", Modifier.weight(1f))
-                    Text(syncStatus.lastForegroundRefreshMillis.takeIf { it > 0 }?.let(::relativeTime) ?: "Never",
+                    Text(stringResource(R.string.last_app_open_refresh), Modifier.weight(1f))
+                    Text(syncStatus.lastForegroundRefreshMillis.takeIf { it > 0 }?.let { relativeTime(it) } ?: stringResource(R.string.never),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row(Modifier.fillMaxWidth()) {
-                    Text("Last background attempt", Modifier.weight(1f))
-                    Text(syncStatus.lastBackgroundRefreshMillis.takeIf { it > 0 }?.let(::relativeTime) ?: "Never",
+                    Text(stringResource(R.string.last_background_attempt), Modifier.weight(1f))
+                    Text(syncStatus.lastBackgroundRefreshMillis.takeIf { it > 0 }?.let { relativeTime(it) } ?: stringResource(R.string.never),
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (syncStatus.lastDurationMillis > 0) {
                     Row(Modifier.fillMaxWidth()) {
-                        Text("Last sync duration", Modifier.weight(1f))
-                        Text(formatSyncDuration(syncStatus.lastDurationMillis),
+                        Text(stringResource(R.string.last_sync_duration), Modifier.weight(1f))
+                        Text(formatSyncDuration(
+                            syncStatus.lastDurationMillis,
+                            configuration.locales[0],
+                        ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Text(
-                    "Last sync is the latest successful sync from any source. A background attempt may match it when that worker succeeded, or be newer when the worker was skipped or failed. Android schedules background work about every 15 minutes when connected, but battery restrictions may delay it. Opening Actua requests an immediate foreground refresh while local data stays available.",
+                    stringResource(R.string.sync_timing_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                syncStatus.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                syncStatus.error?.let { Text(syncErrorDisplayMessage(it), color = MaterialTheme.colorScheme.error) }
                 OutlinedButton(enabled = !demoActive && !syncing && !loading && downloadingId == null,
                     modifier = Modifier.fillMaxWidth(), onClick = {
                         syncing = true; message = null
                         scope.launch {
                             runCatching { withContext(Dispatchers.IO) {
-                                ActualSyncRunner.run(context, trigger = "Manual")
+                                ActualSyncRunner.run(context, trigger = SYNC_TRIGGER_MANUAL)
                             } }.onSuccess { result ->
                                 when (result) {
                                     is SyncRunResult.Success -> {
-                                        message = "Synced ${result.outcome.sentMessages} up, ${result.outcome.receivedMessages} down"
+                                        message = resources.getString(R.string.sync_result, result.outcome.sentMessages, result.outcome.receivedMessages)
                                         onBudgetInstalled()
                                     }
                                     SyncRunResult.NotConfigured -> {
-                                        message = "Download and select a budget first."
+                                        message = resources.getString(R.string.download_select_budget_first)
                                     }
                                     SyncRunResult.EncryptionKeyUnavailable -> {
-                                        message = "Unlock this encrypted budget before syncing."
+                                        message = resources.getString(R.string.unlock_budget_before_sync)
                                     }
                                 }
-                            }.onFailure { error -> message = error.message ?: "Sync failed." }
+                            }.onFailure { message = resources.getString(R.string.sync_failed) }
                             syncStatus = syncStatusStore.read(); syncing = false
                         }
                     }) {
                     ManualSyncButtonContent(syncing = syncing, demoActive = demoActive)
                 }
                 val budgetsChevronRotation by animateFloatAsState(
-                    if (budgetsExpanded) 0f else -90f, tween(220), label = "budgets section",
+                    if (budgetsExpanded) 0f else -90f, tween(220), label = "budgetsSection",
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .clickable(role = Role.Button, onClick = { budgetsExpanded = !budgetsExpanded }),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Budgets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                    Text(stringResource(R.string.budgets), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f))
                     Icon(
                         Icons.Outlined.KeyboardArrowDown,
-                        contentDescription = if (budgetsExpanded) "Collapse Budgets" else "Expand Budgets",
+                        contentDescription = stringResource(if (budgetsExpanded) R.string.collapse_budgets else R.string.expand_budgets),
                         modifier = Modifier.rotate(budgetsChevronRotation),
                     )
                 }
@@ -882,12 +933,12 @@ fun ConnectionScreen(
                             onClick = { showCreateBudget = true; newBudgetName = "" },
                             enabled = !loading && downloadingId == null,
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Create new budget") }
+                        ) { Text(stringResource(R.string.create_new_budget)) }
                         if (remoteBudgets.any { it.encryptedKeyId != null }) {
                             OutlinedTextField(
                                 value = encryptionPassword,
                                 onValueChange = { encryptionPassword = it },
-                                label = { Text("Budget encryption password") },
+                                label = { Text(stringResource(R.string.budget_encryption_password)) },
                                 singleLine = true,
                                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth(),
@@ -903,10 +954,10 @@ fun ConnectionScreen(
                                     Text(remote.name, fontWeight = FontWeight.Medium)
                                     Text(
                                         when {
-                                            activeBudget.budgetId == local?.id -> "Active"
-                                            local != null -> "Downloaded"
-                                            remote.encryptedKeyId != null -> "Encrypted"
-                                            else -> "Available"
+                                            activeBudget.budgetId == local?.id -> stringResource(R.string.active)
+                                            local != null -> stringResource(R.string.downloaded)
+                                            remote.encryptedKeyId != null -> stringResource(R.string.encrypted)
+                                            else -> stringResource(R.string.available)
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -931,12 +982,14 @@ fun ConnectionScreen(
                                                 }
                                             }.onSuccess { metadata ->
                                                 activeBudget.budgetId = metadata.id
-                                                message = "${remote.name} is downloaded and active."
+                                                message = resources.getString(R.string.budget_downloaded_active, remote.name)
                                                 onBudgetInstalled()
                                             }.onFailure { error ->
                                                 message = when (error) {
-                                                    BudgetDownloadException.EncryptionPasswordRequired -> "Enter the budget encryption password."
-                                                    else -> error.message ?: "Could not download the budget."
+                                                    BudgetDownloadException.EncryptionPasswordRequired -> resources.getString(R.string.enter_budget_encryption_password)
+                                                    BudgetDownloadException.EncryptionKeyChanged -> resources.getString(R.string.budget_encryption_key_changed)
+                                                    BudgetDownloadException.InvalidEncryptionMetadata -> resources.getString(R.string.invalid_budget_encryption_metadata)
+                                                    else -> resources.getString(R.string.could_not_download_budget)
                                                 }
                                                 onBudgetInstalled()
                                             }
@@ -945,24 +998,24 @@ fun ConnectionScreen(
                                     },
                                 ) {
                                     if (downloadingId == remote.fileId) CircularProgressIndicator(Modifier.padding(end = 8.dp))
-                                    Text(if (local == null) "Download" else if (activeBudget.budgetId == local.id) "Refresh" else "Use")
+                                    Text(stringResource(if (local == null) R.string.download else if (activeBudget.budgetId == local.id) R.string.refresh else R.string.use))
                                 }
                                 TextButton(
                                     enabled = downloadingId == null && !loading,
                                     onClick = { pendingDelete = remote; deleteConfirmation = "" },
-                                ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                                ) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
                             }
                         }
                         OutlinedButton(onClick = { loadBudgets() }, enabled = !loading && downloadingId == null,
-                            modifier = Modifier.fillMaxWidth()) { Text("Refresh budget list") }
+                            modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.refresh_budget_list)) }
                     }
                 }
             }
 
             activeBudget.budgetId?.let { budgetId ->
-                Text("Backups", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.backups_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Private backups are created when you leave the app and can be mirrored to a folder you choose.",
+                    stringResource(R.string.private_backups_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -970,7 +1023,10 @@ fun ConnectionScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !backupBusy,
                     onClick = { showBackups = true },
-                ) { Text("Backups  ${backups.count { it is BackupItem.Archive }}") }
+                ) {
+                    val count = backups.count { it is BackupItem.Archive }
+                    Text(androidx.compose.ui.res.pluralStringResource(R.plurals.backups_count, count, count))
+                }
                 OutlinedButton(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !backupBusy && downloadingId == null && !syncing,
@@ -982,14 +1038,14 @@ fun ConnectionScreen(
                         backupBusy = true; message = null
                         scope.launch {
                             runCatching { withContext(Dispatchers.IO) { backupService.makeBackup(budgetId) } }
-                                .onSuccess { message = "Backup created." }
-                                .onFailure { message = it.message ?: "Could not create a backup." }
+                                .onSuccess { message = resources.getString(R.string.backup_created) }
+                                .onFailure { message = resources.getString(R.string.could_not_create_a_backup) }
                             backupBusy = false; refreshBackups()
                         }
                     },
                 ) {
                     if (backupBusy) CircularProgressIndicator(Modifier.padding(end = 8.dp))
-                    Text(if (backupBusy) "Working…" else "Create backup now")
+                    Text(stringResource(if (backupBusy) R.string.working else R.string.create_backup_now))
                 }
             }
         }

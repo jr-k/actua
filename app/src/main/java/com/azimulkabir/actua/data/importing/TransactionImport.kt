@@ -19,7 +19,34 @@ data class ImportCandidate(
     val accountHint: String? = null,
 )
 
-data class ImportProblem(val sourceRow: Int, val message: String)
+enum class ImportProblemCode {
+    FILE_EMPTY,
+    MISSING_REQUIRED_COLUMNS,
+    PAYEE_BLANK,
+    AMOUNT_BLANK,
+    AMOUNT_BLANK_OR_ZERO,
+    INVALID_AMOUNT,
+    UNSUPPORTED_DATE,
+    UNCLOSED_QUOTED_FIELD,
+    DEBIT_OR_CREDIT_NOT_RECOGNIZED,
+    TRANSACTION_AMOUNT_NOT_RECOGNIZED,
+    ROW_COULD_NOT_BE_PARSED,
+}
+
+data class ImportProblem(
+    val sourceRow: Int,
+    val code: ImportProblemCode,
+    val detail: String? = null,
+) {
+    constructor(sourceRow: Int, legacyMessage: String) : this(
+        sourceRow = sourceRow,
+        code = when (legacyMessage) {
+            "No debit or credit wording was recognized" -> ImportProblemCode.DEBIT_OR_CREDIT_NOT_RECOGNIZED
+            "No transaction amount was recognized" -> ImportProblemCode.TRANSACTION_AMOUNT_NOT_RECOGNIZED
+            else -> ImportProblemCode.ROW_COULD_NOT_BE_PARSED
+        },
+    )
+}
 
 data class ImportParseResult(
     val candidates: List<ImportCandidate>,
@@ -73,7 +100,9 @@ object CsvTransactionCandidateSource : TransactionCandidateSource {
     }
 
     fun parse(table: ImportTable, mapping: ImportColumnMapping = suggestedMapping(table.headers)): ImportParseResult {
-        if (table.headers.isEmpty()) return ImportParseResult(emptyList(), listOf(ImportProblem(1, "The file is empty")))
+        if (table.headers.isEmpty()) {
+            return ImportParseResult(emptyList(), listOf(ImportProblem(1, ImportProblemCode.FILE_EMPTY)))
+        }
         fun column(role: ImportColumnRole) = mapping.roles.indexOf(role).takeIf { it >= 0 }
         val date = column(ImportColumnRole.DATE)
         val payee = column(ImportColumnRole.PAYEE)
@@ -84,11 +113,11 @@ object CsvTransactionCandidateSource : TransactionCandidateSource {
         val credit = column(ImportColumnRole.CREDIT)
         val missing = buildList {
             if (date == null) add("date")
-            if (payee == null) add("description/payee")
-            if (amount == null && debit == null && credit == null) add("amount or debit/credit")
+            if (payee == null) add("payee")
+            if (amount == null && debit == null && credit == null) add("amount")
         }
         if (missing.isNotEmpty()) return ImportParseResult(emptyList(), listOf(
-            ImportProblem(1, "Missing required column${if (missing.size > 1) "s" else ""}: ${missing.joinToString()}")
+            ImportProblem(1, ImportProblemCode.MISSING_REQUIRED_COLUMNS, missing.joinToString(","))
         ))
 
         val candidates = mutableListOf<ImportCandidate>()
@@ -96,9 +125,11 @@ object CsvTransactionCandidateSource : TransactionCandidateSource {
         table.rows.forEachIndexed { index, row ->
             val sourceRow = index + 2
             if (row.all(String::isBlank)) return@forEachIndexed
-            runCatching {
+            try {
                 val parsedDate = parseDate(row.value(date!!), mapping.datePattern)
-                val parsedPayee = row.value(payee!!).trim().ifBlank { error("Description/payee is blank") }
+                val parsedPayee = row.value(payee!!).trim().ifBlank {
+                    throw ImportParseException(ImportProblemCode.PAYEE_BLANK)
+                }
                 val cents = if (amount != null) {
                     parseMoney(row.value(amount)).let { if (mapping.expensesArePositive) -it else it }
                 } else {
@@ -106,12 +137,16 @@ object CsvTransactionCandidateSource : TransactionCandidateSource {
                     val debitCents = debit?.let { parseOptionalMoney(row.value(it)) } ?: 0
                     creditCents - debitCents
                 }
-                require(cents != 0L) { "Amount is blank or zero" }
+                if (cents == 0L) throw ImportParseException(ImportProblemCode.AMOUNT_BLANK_OR_ZERO)
                 candidates += ImportCandidate(
                     sourceRow, parsedDate, parsedPayee, notes?.let { row.value(it).trim() }.orEmpty(), cents,
                     reference?.let { row.value(it).trim().takeIf(String::isNotEmpty) },
                 )
-            }.onFailure { problems += ImportProblem(sourceRow, it.message ?: "Could not parse row") }
+            } catch (error: ImportParseException) {
+                problems += ImportProblem(sourceRow, error.code, error.detail)
+            } catch (_: Exception) {
+                problems += ImportProblem(sourceRow, ImportProblemCode.ROW_COULD_NOT_BE_PARSED)
+            }
         }
         return ImportParseResult(candidates, problems)
     }
@@ -122,9 +157,15 @@ object CsvTransactionCandidateSource : TransactionCandidateSource {
         var clean = value.trim().replace(" ", "").replace(",", "")
         val negative = clean.startsWith("(") && clean.endsWith(")")
         clean = clean.trim('(', ')').replace(Regex("[^0-9.+-]"), "")
-        require(clean.isNotBlank()) { "Amount is blank" }
-        return BigDecimal(clean).setScale(2, RoundingMode.UNNECESSARY).movePointRight(2).longValueExact()
-            .let { if (negative) -it else it }
+        if (clean.isBlank()) throw ImportParseException(ImportProblemCode.AMOUNT_BLANK)
+        return try {
+            BigDecimal(clean).setScale(2, RoundingMode.UNNECESSARY).movePointRight(2).longValueExact()
+                .let { if (negative) -it else it }
+        } catch (_: ArithmeticException) {
+            throw ImportParseException(ImportProblemCode.INVALID_AMOUNT)
+        } catch (_: NumberFormatException) {
+            throw ImportParseException(ImportProblemCode.INVALID_AMOUNT)
+        }
     }
 
     private fun parseOptionalMoney(value: String) = if (value.isBlank()) 0L else parseMoney(value)
@@ -141,7 +182,7 @@ object CsvTransactionCandidateSource : TransactionCandidateSource {
         val parsed = formats.firstNotNullOfOrNull { pattern ->
             try { LocalDate.parse(clean, DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH)) }
             catch (_: DateTimeParseException) { null }
-        } ?: error("Unsupported date: ${value.trim()}")
+        } ?: throw ImportParseException(ImportProblemCode.UNSUPPORTED_DATE, value.trim())
         return parsed.year * 10_000 + parsed.monthValue * 100 + parsed.dayOfMonth
     }
 
@@ -168,9 +209,14 @@ object CsvTransactionCandidateSource : TransactionCandidateSource {
             i++
         }
         if (cell.isNotEmpty() || row.isNotEmpty()) { row += cell.toString(); rows += row }
-        require(!quoted) { "Unclosed quoted field" }
+        if (quoted) throw ImportParseException(ImportProblemCode.UNCLOSED_QUOTED_FIELD)
         return rows
     }
+
+    private class ImportParseException(
+        val code: ImportProblemCode,
+        val detail: String? = null,
+    ) : Exception()
 }
 
 object ImportDuplicateDetector {

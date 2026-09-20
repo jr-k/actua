@@ -88,7 +88,7 @@ class ActualBudgetDatabase private constructor(
                 val id = cursor.getString(0)
                 result += ActualAccount(
                     id = id,
-                    name = cursor.stringOrNull(1) ?: "Unknown",
+                    name = cursor.stringOrNull(1).orEmpty(),
                     type = ActualAccountType.fromDatabase(cursor.stringOrNull(2)),
                     offBudget = cursor.intOrZero(3) == 1,
                     closed = cursor.intOrZero(4) == 1,
@@ -232,7 +232,7 @@ class ActualBudgetDatabase private constructor(
             null,
         ).use { cursor ->
             while (cursor.moveToNext()) result += ActualPayee(
-                cursor.getString(0), cursor.stringOrNull(1) ?: "Unknown", cursor.stringOrNull(2),
+                cursor.getString(0), cursor.stringOrNull(1).orEmpty(), cursor.stringOrNull(2),
             )
         }
         return result
@@ -246,7 +246,7 @@ class ActualBudgetDatabase private constructor(
         arrayOf(name),
     ).use { cursor ->
         if (!cursor.moveToFirst()) null else ActualPayee(
-            cursor.getString(0), cursor.stringOrNull(1) ?: "Unknown", cursor.stringOrNull(2),
+            cursor.getString(0), cursor.stringOrNull(1).orEmpty(), cursor.stringOrNull(2),
         )
     }
 
@@ -655,7 +655,7 @@ class ActualBudgetDatabase private constructor(
         ).use { cursor ->
             while (cursor.moveToNext()) categories += ActualCategory(
                 id = cursor.getString(0),
-                name = cursor.stringOrNull(1) ?: "Unknown",
+                name = cursor.stringOrNull(1).orEmpty(),
                 groupId = cursor.stringOrNull(2) ?: "",
                 isIncome = cursor.intOrZero(3) == 1,
                 hidden = cursor.intOrZero(4) == 1,
@@ -673,7 +673,7 @@ class ActualBudgetDatabase private constructor(
                 val id = cursor.getString(0)
                 result += ActualCategoryGroup(
                     id = id,
-                    name = cursor.stringOrNull(1) ?: "Unknown",
+                    name = cursor.stringOrNull(1).orEmpty(),
                     isIncome = cursor.intOrZero(2) == 1,
                     hidden = cursor.intOrZero(3) == 1,
                     sortOrder = cursor.doubleOrZero(4),
@@ -692,7 +692,7 @@ class ActualBudgetDatabase private constructor(
         return database.rawQuery("SELECT id, name, tombstone FROM cleanup_groups $where", null).use { cursor ->
             val rows = mutableListOf<ActualCleanupGroup>()
             while (cursor.moveToNext()) rows += ActualCleanupGroup(
-                id = cursor.getString(0), name = cursor.stringOrNull(1) ?: "Unknown", tombstone = cursor.intOrZero(2) == 1,
+                id = cursor.getString(0), name = cursor.stringOrNull(1).orEmpty(), tombstone = cursor.intOrZero(2) == 1,
             )
             rows
         }
@@ -983,12 +983,12 @@ class ActualBudgetDatabase private constructor(
         data class Group(val id: String, val name: String, val hidden: Boolean, val sort: Double)
         val categories = mutableListOf<Cat>()
         database.rawQuery("SELECT id,name,cat_group,is_income,hidden,sort_order,goal_def,template_settings,cleanup_def FROM categories WHERE tombstone = 0 OR tombstone IS NULL", null).use { c ->
-            while (c.moveToNext()) categories += Cat(c.getString(0), c.stringOrNull(1) ?: "Unknown", c.stringOrNull(2) ?: "", c.intOrZero(3) == 1, c.intOrZero(4) == 1, c.doubleOrZero(5),
+            while (c.moveToNext()) categories += Cat(c.getString(0), c.stringOrNull(1).orEmpty(), c.stringOrNull(2).orEmpty(), c.intOrZero(3) == 1, c.intOrZero(4) == 1, c.doubleOrZero(5),
                 c.stringOrNull(6), c.stringOrNull(7)?.let { raw -> runCatching { JSONObject(raw).optString("source") }.getOrNull() }, c.stringOrNull(8))
         }
         val groups = mutableMapOf<String, Group>()
         database.rawQuery("SELECT id,name,hidden,sort_order FROM category_groups WHERE tombstone = 0 OR tombstone IS NULL", null).use { c ->
-            while (c.moveToNext()) groups[c.getString(0)] = Group(c.getString(0), c.stringOrNull(1) ?: "Unknown", c.intOrZero(2) == 1, c.doubleOrZero(3))
+            while (c.moveToNext()) groups[c.getString(0)] = Group(c.getString(0), c.stringOrNull(1).orEmpty(), c.intOrZero(2) == 1, c.doubleOrZero(3))
         }
         val incomeIds = categories.filter(Cat::income).mapTo(mutableSetOf(), Cat::id)
         val expenseIds = categories.filterNot(Cat::income).mapTo(mutableSetOf(), Cat::id)

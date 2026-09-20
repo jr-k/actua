@@ -20,8 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.model.CreditCardCycle
 import com.azimulkabir.actua.model.Transaction
 import com.azimulkabir.actua.ui.components.ActuaScreenHeader
@@ -44,9 +47,12 @@ fun CreditCardStatementsScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = accountName, onBack = onBack)
+        ActuaScreenHeader(
+            title = accountName.ifBlank { stringResource(R.string.fs_unknown_account) },
+            onBack = onBack,
+        )
         if (statements.isEmpty()) {
-            Text("No closed statements yet.", style = MaterialTheme.typography.bodyMedium,
+            Text(stringResource(R.string.fs_no_closed_statements), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
@@ -61,6 +67,7 @@ fun CreditCardStatementsScreen(
 
 @Composable
 private fun StatementRow(statement: CreditCardCycle.StatementRecord, hideDecimalPlaces: Boolean, onClick: () -> Unit) {
+    val locale = LocalConfiguration.current.locales[0]
     Row(
         Modifier.fillMaxWidth()
             .clickable(onClick = onClick)
@@ -68,11 +75,11 @@ private fun StatementRow(statement: CreditCardCycle.StatementRecord, hideDecimal
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("${statement.startDate.abbreviated()} – ${statement.endDate.abbreviated()}")
+            Text("${statement.startDate.abbreviated(locale)} – ${statement.endDate.abbreviated(locale)}")
             if (statement.isPaid) {
-                Text("Paid", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.success)
+                Text(stringResource(R.string.fs_status_paid), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.success)
             } else {
-                Text("Due ${statement.dueDate.abbreviated()}", style = MaterialTheme.typography.bodySmall,
+                Text(stringResource(R.string.fs_due_date, statement.dueDate.abbreviated(locale)), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -83,8 +90,8 @@ private fun StatementRow(statement: CreditCardCycle.StatementRecord, hideDecimal
     }
 }
 
-private fun com.azimulkabir.actua.data.schedules.DayDate.abbreviated(): String =
-    LocalDate.of(year, month, day).format(DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH))
+private fun com.azimulkabir.actua.data.schedules.DayDate.abbreviated(locale: Locale): String =
+    LocalDate.of(year, month, day).format(DateTimeFormatter.ofPattern("dd MMM", locale))
 
 /** Mirrors Actuali's CreditCardStatementDetailView: statement summary plus its transactions. */
 @Composable
@@ -97,26 +104,27 @@ fun CreditCardStatementDetailScreen(
     onSelectTransaction: (Transaction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val locale = LocalConfiguration.current.locales[0]
     Column(modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Statement Details", onBack = onBack)
+        ActuaScreenHeader(title = stringResource(R.string.fs_statement_details), onBack = onBack)
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DetailRow("Statement Period", "${statement.startDate.abbreviated()} – ${statement.endDate.abbreviated()}")
-            DetailRow("Statement Balance", formatMoneyCents(statement.statementBalance, hideDecimalPlaces))
-            DetailRow("Payment Due", statement.dueDate.abbreviated())
+            DetailRow(stringResource(R.string.fs_statement_period), "${statement.startDate.abbreviated(locale)} – ${statement.endDate.abbreviated(locale)}")
+            DetailRow(stringResource(R.string.fs_statement_balance), formatMoneyCents(statement.statementBalance, hideDecimalPlaces))
+            DetailRow(stringResource(R.string.fs_payment_due), statement.dueDate.abbreviated(locale))
             if (statement.isPaid) {
-                DetailRow("Status", "Paid", highlightGreen = true)
+                DetailRow(stringResource(R.string.fs_status), stringResource(R.string.fs_status_paid), highlightGreen = true)
             } else {
-                DetailRow("Remaining Due", formatMoneyCents(statement.remainingDue, hideDecimalPlaces))
+                DetailRow(stringResource(R.string.fs_remaining_due), formatMoneyCents(statement.remainingDue, hideDecimalPlaces))
             }
-            DetailRow("Cycle Spend", formatMoneyCents(statement.totalSpend, hideDecimalPlaces))
+            DetailRow(stringResource(R.string.fs_cycle_spend), formatMoneyCents(statement.totalSpend, hideDecimalPlaces))
             if (statement.paymentsSince > 0) {
-                DetailRow("Payments & Credits", formatMoneyCents(statement.paymentsSince, hideDecimalPlaces))
+                DetailRow(stringResource(R.string.fs_payments_credits), formatMoneyCents(statement.paymentsSince, hideDecimalPlaces))
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
         when {
             isLoading -> Box(Modifier.fillMaxWidth().padding(32.dp)) { CircularProgressIndicator(Modifier.padding(0.dp)) }
-            transactions.isEmpty() -> Text("No transactions in this statement", style = MaterialTheme.typography.bodyMedium,
+            transactions.isEmpty() -> Text(stringResource(R.string.fs_no_statement_transactions), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(transactions, key = { it.id }) { tx ->

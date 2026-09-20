@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.azimulkabir.actua.R
 
 @Composable
 fun RenameDialog(title: String, currentName: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
@@ -17,7 +19,9 @@ fun RenameDialog(title: String, currentName: String, onDismiss: () -> Unit, onSa
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { OutlinedTextField(value = value, onValueChange = { value = it }, singleLine = true) },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        confirmButton = { TextButton(enabled = value.trim().isNotEmpty(), onClick = { onSave(value.trim()) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+        confirmButton = { TextButton(enabled = value.trim().isNotEmpty(), onClick = { onSave(value.trim()) }) {
+            Text(stringResource(R.string.action_save))
+        } },
     )
 }
