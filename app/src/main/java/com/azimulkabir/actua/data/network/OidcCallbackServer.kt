@@ -8,13 +8,35 @@ import java.net.SocketTimeoutException
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
+data class OidcCallbackPageText(
+    val languageTag: String,
+    val completionTitle: String,
+    val completionMessage: String,
+    val returnToApp: String,
+    val callbackErrorTitle: String,
+    val callbackErrorMessage: String,
+) {
+    companion object {
+        fun english() = OidcCallbackPageText(
+            languageTag = "en",
+            completionTitle = "Sign-in complete",
+            completionMessage = "You are signed in to Actua.",
+            returnToApp = "Return to Actua",
+            callbackErrorTitle = "Sign-in could not be completed",
+            callbackErrorMessage = "The callback did not contain an Actual session token. Return to Actua and try again.",
+        )
+    }
+}
+
 /**
  * Small one-shot loopback HTTP listener used only while the user completes Actual's OpenID flow.
  *
  * Actual accepts localhost as a return URL and redirects to /openid-cb?token=... after the provider
  * callback. Binding only to the loopback interface keeps the callback unreachable from the LAN.
  */
-class OidcCallbackServer : Closeable {
+class OidcCallbackServer(
+    private val pageText: OidcCallbackPageText = OidcCallbackPageText.english(),
+) : Closeable {
     private val serverSocket = ServerSocket().apply {
         reuseAddress = true
         bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0))
@@ -49,8 +71,8 @@ class OidcCallbackServer : Closeable {
                 writeResponse(
                     client,
                     400,
-                    "Sign-in could not be completed",
-                    "The callback did not contain an Actual session token. Return to Actua and try again.",
+                    pageText.callbackErrorTitle,
+                    pageText.callbackErrorMessage,
                 )
             }
         }
@@ -84,17 +106,20 @@ class OidcCallbackServer : Closeable {
         message: String,
     ) {
         val reason = if (status == 200) "OK" else "Bad Request"
+        val escapedLanguageTag = pageText.languageTag.escapeHtml()
+        val escapedTitle = title.escapeHtml()
+        val escapedMessage = message.escapeHtml()
         val body = """
             <!doctype html>
-            <html lang="en">
+            <html lang="$escapedLanguageTag">
               <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>$title</title>
+                <title>$escapedTitle</title>
               </head>
               <body style="font-family:sans-serif;max-width:36rem;margin:4rem auto;padding:0 1.25rem;line-height:1.5">
-                <h2>$title</h2>
-                <p>$message</p>
+                <h2>$escapedTitle</h2>
+                <p>$escapedMessage</p>
               </body>
             </html>
         """.trimIndent()
@@ -112,18 +137,22 @@ class OidcCallbackServer : Closeable {
     }
 
     private fun writeAppRedirect(socket: java.net.Socket) {
+        val escapedLanguageTag = pageText.languageTag.escapeHtml()
+        val escapedTitle = pageText.completionTitle.escapeHtml()
+        val escapedMessage = pageText.completionMessage.escapeHtml()
+        val escapedReturnToApp = pageText.returnToApp.escapeHtml()
         val body = """
             <!doctype html>
-            <html lang="en">
+            <html lang="$escapedLanguageTag">
               <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>Sign-in complete</title>
+                <title>$escapedTitle</title>
               </head>
               <body style="font-family:sans-serif;max-width:36rem;margin:4rem auto;padding:0 1.25rem;line-height:1.5">
-                <h2>Sign-in complete</h2>
-                <p>You are signed in to Actua.</p>
-                <p><a href="$APP_RETURN_URL">Return to Actua</a></p>
+                <h2>$escapedTitle</h2>
+                <p>$escapedMessage</p>
+                <p><a href="$APP_RETURN_URL">$escapedReturnToApp</a></p>
               </body>
             </html>
         """.trimIndent()
@@ -143,5 +172,18 @@ class OidcCallbackServer : Closeable {
     companion object {
         private const val APP_RETURN_URL = "actua://oidc-complete"
         private const val DEFAULT_TIMEOUT_MILLIS = 5 * 60 * 1000
+    }
+}
+
+private fun String.escapeHtml(): String = buildString(length) {
+    this@escapeHtml.forEach { character ->
+        append(when (character) {
+            '&' -> "&amp;"
+            '<' -> "&lt;"
+            '>' -> "&gt;"
+            '"' -> "&quot;"
+            '\'' -> "&#39;"
+            else -> character
+        })
     }
 }

@@ -4,9 +4,11 @@ import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.snap
@@ -19,6 +21,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
@@ -73,9 +76,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -136,19 +146,21 @@ import com.azimulkabir.actua.ui.components.DateDisplay
 import com.azimulkabir.actua.ui.components.NumberDisplay
 import com.azimulkabir.actua.ui.components.formatMoneyCents
 import com.azimulkabir.actua.AppLaunchRequest
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.SHARED_IMPORT_ACTION
 import com.azimulkabir.actua.widget.WidgetActions
 import com.azimulkabir.actua.widget.WidgetUpdater
 
 private enum class MainDestination(
-    val label: String,
+    val preferenceValue: String,
+    @StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
-    Home("Home", Icons.Outlined.Home),
-    Budget("Budget", Icons.Outlined.PieChartOutline),
-    Transactions("Transactions", Icons.Outlined.ReceiptLong),
-    Accounts("Accounts", Icons.Outlined.AccountBalanceWallet),
-    Manage("Manage", Icons.Outlined.Tune),
+    Home("Home", R.string.navigation_home, Icons.Outlined.Home),
+    Budget("Budget", R.string.navigation_budget, Icons.Outlined.PieChartOutline),
+    Transactions("Transactions", R.string.navigation_transactions, Icons.Outlined.ReceiptLong),
+    Accounts("Accounts", R.string.navigation_accounts, Icons.Outlined.AccountBalanceWallet),
+    Manage("Manage", R.string.navigation_manage, Icons.Outlined.Tune),
 }
 
 private enum class DetailDestination { Main, Reports, Transactions, EditTransaction, Search, Connection, CreditCards, CreditCardStatements, CreditCardStatementDetail, Rules, Schedules, ImportTransactions, PayeeLocations, BillsCalendar, FindSchedules, NewSchedule, EditSchedule, ManageCategories, ReorderGroups, BudgetAutomation, CustomizeHome }
@@ -196,11 +208,43 @@ internal fun SyncStatusBanner(modifier: Modifier = Modifier) {
                     .testTag("syncStatusBannerIndicator"),
             )
             Text(
-                "Syncing budget… Showing local data.",
+                stringResource(R.string.navigation_syncing_budget),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
+        }
+    }
+}
+
+@Composable
+private fun BudgetSwitchOverlay() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.45f))
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent().changes.forEach { it.consume() }
+                    }
+                }
+            }
+            .clearAndSetSemantics { contentDescription = "Loading budget" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 6.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                CircularProgressIndicator()
+                Text("Loading budget…", style = MaterialTheme.typography.titleMedium)
+            }
         }
     }
 }
@@ -215,10 +259,13 @@ fun AppNavigation(
     onUseDynamicColorChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
+    val configuration = LocalConfiguration.current
     val appContext = context.applicationContext
     val coroutineScope = rememberCoroutineScope()
     val locationPreferences = remember { LocationPreferences(context) }
     val displayPreferences = remember { DisplayPreferences(context) }
+    val languageTag = AppCompatDelegate.getApplicationLocales().get(0)?.language.orEmpty()
     val favoritePreferences = remember { FavoritePreferences(context) }
     val homePreferences = remember { HomePreferences(context) }
     var homeLayout by remember { mutableStateOf(homePreferences.layout()) }
@@ -234,6 +281,8 @@ fun AppNavigation(
         CreditCardDueNotificationScheduler.refresh(context)
     }
     var repositoryVersion by remember { mutableStateOf(0) }
+    var budgetReplacementInProgress by remember { mutableStateOf(false) }
+    var budgetReplacementCompleted by remember { mutableStateOf(false) }
     val favoriteBudgetId = remember(repositoryVersion) { ActiveBudgetStore(context).budgetId ?: "no-budget" }
     val repository = remember(repositoryVersion) { ActuaRepository(context) }
     var dataVersion by remember { mutableStateOf(0) }
@@ -294,7 +343,7 @@ fun AppNavigation(
     var editingScheduleId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingAutomationCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var destination by rememberSaveable {
-        mutableStateOf(MainDestination.entries.firstOrNull { it.label == displayPreferences.startPage }
+        mutableStateOf(MainDestination.entries.firstOrNull { it.preferenceValue == displayPreferences.startPage }
             ?: MainDestination.Accounts)
     }
     // Bottom navigation selection is deliberately separate from the displayed destination. A
@@ -330,6 +379,7 @@ fun AppNavigation(
     var addOrigin by rememberSaveable { mutableStateOf(MainDestination.Accounts) }
     var transactionFabExpanded by rememberSaveable { mutableStateOf(true) }
     var accountsSyncing by remember { mutableStateOf(false) }
+    var transactionsRefreshing by remember { mutableStateOf(false) }
     var reconcileOpen by remember { mutableStateOf(false) }
     var scheduleReturnsToBills by rememberSaveable { mutableStateOf(false) }
     var scheduleReturnsToTransactions by rememberSaveable { mutableStateOf(false) }
@@ -384,16 +434,44 @@ fun AppNavigation(
     val snackbarHostState = remember { SnackbarHostState() }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    fun mutate(label: String, action: () -> Boolean): Boolean = runCatching(action).fold(
+    fun mutate(@StringRes labelRes: Int, action: () -> Boolean): Boolean {
+        val label = resources.getString(labelRes)
+        return runCatching(action).fold(
         onSuccess = { changed ->
-            if (changed) dataVersion += 1 else errorMessage = "$label could not be completed."
+            if (changed) dataVersion += 1
+            else errorMessage = resources.getString(R.string.navigation_mutation_incomplete, label)
             changed
         },
-        onFailure = { error ->
-            errorMessage = error.message?.takeIf(String::isNotBlank) ?: "$label failed."
+        onFailure = {
+            errorMessage = resources.getString(R.string.navigation_mutation_failed, label)
             false
         },
     )
+    }
+
+    fun refreshTransactions() {
+        if (transactionsRefreshing) return
+        transactionsRefreshing = true
+        coroutineScope.launch {
+            try {
+                when (withContext(Dispatchers.IO) {
+                    ActualSyncRunner.run(context, trigger = "Pull to refresh")
+                }) {
+                    is SyncRunResult.Success -> Unit
+                    SyncRunResult.NotConfigured -> dataVersion += 1
+                    SyncRunResult.EncryptionKeyUnavailable -> {
+                        errorMessage = "Unlock this encrypted budget before syncing."
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                errorMessage = error.message?.takeIf(String::isNotBlank) ?: "Sync failed."
+            } finally {
+                transactionsRefreshing = false
+            }
+        }
+    }
 
     fun syncFromAccounts() {
         if (accountsSyncing || syncStatus.running) return
@@ -428,7 +506,8 @@ fun AppNavigation(
     // [onChanged] fires afterwards on the main thread once the local write has durably
     // completed. Use this for mutations on interaction-critical paths (e.g. dismissing an
     // editor) so local DB work never blocks the UI thread.
-    fun mutateAsync(label: String, action: () -> Boolean, onChanged: () -> Unit) {
+    fun mutateAsync(@StringRes labelRes: Int, action: () -> Boolean, onChanged: () -> Unit) {
+        val label = resources.getString(labelRes)
         coroutineScope.launch {
             val result = withContext(Dispatchers.IO) { runCatching(action) }
             result.fold(
@@ -437,11 +516,11 @@ fun AppNavigation(
                         dataVersion += 1
                         onChanged()
                     } else {
-                        errorMessage = "$label could not be completed."
+                        errorMessage = resources.getString(R.string.navigation_mutation_incomplete, label)
                     }
                 },
-                onFailure = { error ->
-                    errorMessage = error.message?.takeIf(String::isNotBlank) ?: "$label failed."
+                onFailure = {
+                    errorMessage = resources.getString(R.string.navigation_mutation_failed, label)
                 },
             )
         }
@@ -515,6 +594,16 @@ fun AppNavigation(
         if (syncDataGeneration > 0) dataVersion += 1
     }
 
+    LaunchedEffect(budgetReplacementCompleted) {
+        if (budgetReplacementCompleted) {
+            // repositoryVersion has already rebuilt the repository and all screen projections.
+            // Keep the blocker through the first frame that can display those new values.
+            withFrameNanos { }
+            budgetReplacementInProgress = false
+            budgetReplacementCompleted = false
+        }
+    }
+
     LaunchedEffect(destination) {
         if (tabSwitchJob?.isActive != true) selectedTab = destination
     }
@@ -529,7 +618,7 @@ fun AppNavigation(
                 reportSnapshotVersion = dataVersion
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                errorMessage = "Failed to load reports: ${e.localizedMessage}"
+                errorMessage = resources.getString(R.string.navigation_reports_load_failed)
             }
         }
     }
@@ -562,8 +651,7 @@ fun AppNavigation(
             }
             SyncRunResult.NotConfigured -> Unit
             SyncRunResult.EncryptionKeyUnavailable -> {
-                val error = IllegalStateException("Unlock this encrypted budget before syncing")
-                errorMessage = error.message
+                errorMessage = resources.getString(R.string.navigation_unlock_before_syncing)
             }
             null -> Unit
         }
@@ -678,8 +766,11 @@ fun AppNavigation(
         }
     }
 
+    BackHandler(enabled = budgetReplacementInProgress) { }
+
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (shouldShowSyncBanner(syncStatus) && repository.isUsingActualBudget) {
@@ -704,7 +795,7 @@ fun AppNavigation(
                     },
                     expanded = transactionFabExpanded,
                     icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                    text = { Text("Transaction") },
+                    text = { Text(stringResource(R.string.navigation_transaction)) },
                 )
             }
         },
@@ -726,6 +817,7 @@ fun AppNavigation(
                 },
             ) {
                 MainDestination.entries.forEach { item ->
+                    val itemLabel = stringResource(item.labelRes)
                     NavigationBarItem(
                         selected = selectedTab == item,
                         onClick = {
@@ -784,11 +876,11 @@ fun AppNavigation(
                             }
                             transactionFabExpanded = true
                         },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        icon = { Icon(item.icon, contentDescription = itemLabel) },
                         label = if (showBottomNavigationLabels) {
                             {
                                 Text(
-                                    text = item.label,
+                                    text = itemLabel,
                                     maxLines = 1,
                                     softWrap = false,
                                     autoSize = TextAutoSize.StepBased(
@@ -877,40 +969,40 @@ fun AppNavigation(
                     hideReconciledTransactions = it
                 },
                 onSetCleared = { transaction, cleared ->
-                    mutate("Updating transaction") { repository.setTransactionCleared(transaction.id, cleared) }
+                    mutate(R.string.navigation_updating_transaction) { repository.setTransactionCleared(transaction.id, cleared) }
                 },
                 onReconcileAccount = { account ->
-                    mutate("Reconciling account") { repository.reconcileAccount(account.id) }
+                    mutate(R.string.navigation_reconciling_account) { repository.reconcileAccount(account.id) }
                 },
                 onCreateReconciliationAdjustment = { account, difference ->
-                    mutate("Creating reconciliation adjustment") {
+                    mutate(R.string.navigation_creating_reconciliation_adjustment) {
                         repository.createReconciliationAdjustment(account.id, difference)
                     }
                 },
                 onDelete = { transaction ->
-                    mutate("Deleting transaction") { repository.deleteTransaction(transaction.id) }
+                    mutate(R.string.navigation_deleting_transaction) { repository.deleteTransaction(transaction.id) }
                 },
                 onDeleteMultiple = { transactionsToDelete ->
-                    mutate("Deleting transactions") {
+                    mutate(R.string.navigation_deleting_transactions) {
                         repository.deleteTransactions(transactionsToDelete.map { it.id }) > 0
                     }
                 },
                 onDuplicate = { transaction ->
-                    mutate("Duplicating transaction") { repository.saveTransaction(transaction.asDuplicate()); true }
+                    mutate(R.string.navigation_duplicating_transaction) { repository.saveTransaction(transaction.asDuplicate()); true }
                 },
                 onDuplicateMultiple = { transactionsToDuplicate ->
-                    mutate("Duplicating transactions") {
+                    mutate(R.string.navigation_duplicating_transactions) {
                         transactionsToDuplicate.forEach { repository.saveTransaction(it.asDuplicate()) }
                         transactionsToDuplicate.isNotEmpty()
                     }
                 },
                 onLinkSchedule = { transactionsToLink, scheduleId ->
-                    mutate("Linking schedule") {
+                    mutate(R.string.navigation_linking_schedule) {
                         repository.linkScheduleTransactions(scheduleId, transactionsToLink.map { it.id }) > 0
                     }
                 },
                 onUnlinkSchedule = { transactionsToUnlink ->
-                    mutate("Unlinking schedule") {
+                    mutate(R.string.navigation_unlinking_schedule) {
                         repository.unlinkScheduleFromTransactions(transactionsToUnlink.map { it.id }) > 0
                     }
                 },
@@ -928,7 +1020,7 @@ fun AppNavigation(
                 },
                 onSaveAccountNote = { note ->
                     accounts.firstOrNull { it.name == transactionAccount }?.let { account ->
-                        mutate("Saving account note") { repository.setAccountNote(account.id, note) }
+                        mutate(R.string.navigation_saving_account_note) { repository.setAccountNote(account.id, note) }
                     }
                 },
                 onViewStatements = {
@@ -951,6 +1043,8 @@ fun AppNavigation(
                 },
                 showNotes = showNotes,
                 onReconcileVisibilityChange = { reconcileOpen = it },
+                isRefreshing = transactionsRefreshing,
+                onRefresh = ::refreshTransactions,
             )
             DetailDestination.EditTransaction -> {
             // Otherwise these are rebuilt from the whole account/payee lists on every
@@ -966,8 +1060,10 @@ fun AppNavigation(
                 if (hideBalances) emptyMap() else nonClosedAccounts
                     .associate { it.name to formatMoneyCents(it.balanceCents, hideDecimalPlaces) }
             }
-            val payeeOptions = remember(payeeNames, nonClosedAccounts) {
-                (payeeNames + nonClosedAccounts.map { "Transfer: ${it.name}" }).distinct()
+            val payeeOptions = remember(payeeNames, nonClosedAccounts, configuration) {
+                (payeeNames + nonClosedAccounts.map {
+                    resources.getString(R.string.navigation_transfer_payee, it.name)
+                }).distinct()
             }
             AddTransactionScreen(
                 editing = editingTransaction,
@@ -997,8 +1093,8 @@ fun AppNavigation(
                         val result = withContext(Dispatchers.IO) {
                             runCatching { repository.saveTransaction(savedTransaction) }
                         }
-                        result.onFailure { error ->
-                            errorMessage = error.message?.takeIf(String::isNotBlank) ?: "Saving transaction failed."
+                        result.onFailure {
+                            errorMessage = resources.getString(R.string.navigation_saving_transaction_failed)
                         }
                         if (result.isSuccess) {
                             dataVersion += 1
@@ -1041,7 +1137,7 @@ fun AppNavigation(
                     }
                 },
                 onDelete = { transaction ->
-                    mutateAsync("Deleting transaction", { repository.deleteTransaction(transaction.id) }) {
+                    mutateAsync(R.string.navigation_deleting_transaction, { repository.deleteTransaction(transaction.id) }) {
                         editingTransaction = null
                         detail = when {
                             editorReturnsToStatementDetail -> {
@@ -1090,26 +1186,26 @@ fun AppNavigation(
                                         )
                                     },
                                     message = if (nearby.isEmpty()) {
-                                        "No saved payee locations were found within 500 metres."
+                                        resources.getString(R.string.navigation_no_nearby_payee_locations)
                                     } else {
                                         null
                                     },
                                 )
                             }
                             CurrentLocationResult.PermissionDenied -> NearbyPayeeSearchResult(
-                                message = "Location permission was not granted. You can still search normally.",
+                                message = resources.getString(R.string.navigation_location_permission_search),
                             )
                             CurrentLocationResult.ServicesDisabled -> NearbyPayeeSearchResult(
-                                message = "Turn on device location to find nearby payees.",
+                                message = resources.getString(R.string.navigation_location_disabled_search),
                             )
                             CurrentLocationResult.Timeout -> NearbyPayeeSearchResult(
-                                message = "Location timed out. Try again or search normally.",
+                                message = resources.getString(R.string.navigation_location_timeout_search),
                             )
                             CurrentLocationResult.Unavailable -> NearbyPayeeSearchResult(
-                                message = "Your current location is unavailable. You can still search normally.",
+                                message = resources.getString(R.string.navigation_location_unavailable_search),
                             )
                             is CurrentLocationResult.Inaccurate -> NearbyPayeeSearchResult(
-                                message = "Location accuracy is too low. Try again or search normally.",
+                                message = resources.getString(R.string.navigation_location_inaccurate_search),
                             )
                         }
                     },
@@ -1124,26 +1220,26 @@ fun AppNavigation(
                                     PayeeLocationSaveResult(
                                         nowNearby = true,
                                         message = if (recorded) {
-                                            "Location saved for $payeeName."
+                                            resources.getString(R.string.navigation_location_saved, payeeName)
                                         } else {
-                                            "$payeeName already has a saved location within 500 metres."
+                                            resources.getString(R.string.navigation_location_already_saved, payeeName)
                                         },
                                     )
                                 }
                                 CurrentLocationResult.PermissionDenied -> PayeeLocationSaveResult(
-                                    false, "Location permission was not granted. Nothing was saved.",
+                                    false, resources.getString(R.string.navigation_location_permission_save),
                                 )
                                 CurrentLocationResult.ServicesDisabled -> PayeeLocationSaveResult(
-                                    false, "Turn on device location to save this payee location.",
+                                    false, resources.getString(R.string.navigation_location_disabled_save),
                                 )
                                 CurrentLocationResult.Timeout -> PayeeLocationSaveResult(
-                                    false, "Location timed out. Try again.",
+                                    false, resources.getString(R.string.navigation_location_timeout_save),
                                 )
                                 CurrentLocationResult.Unavailable -> PayeeLocationSaveResult(
-                                    false, "Your current location is unavailable. Nothing was saved.",
+                                    false, resources.getString(R.string.navigation_location_unavailable_save),
                                 )
                                 is CurrentLocationResult.Inaccurate -> PayeeLocationSaveResult(
-                                    false, "Location accuracy is too low. Try again.",
+                                    false, resources.getString(R.string.navigation_location_inaccurate_save),
                                 )
                             }
                         }
@@ -1189,10 +1285,10 @@ fun AppNavigation(
                     detail = DetailDestination.EditTransaction
                 },
                 onTransactionDelete = { transaction ->
-                    mutate("Deleting transaction") { repository.deleteTransaction(transaction.id) }
+                    mutate(R.string.navigation_deleting_transaction) { repository.deleteTransaction(transaction.id) }
                 },
                 onTransactionClearedChange = { transaction, cleared ->
-                    mutate("Updating transaction") { repository.setTransactionCleared(transaction.id, cleared) }
+                    mutate(R.string.navigation_updating_transaction) { repository.setTransactionCleared(transaction.id, cleared) }
                 },
                 onAccountClick = {
                     transactionAccount = it; transactionCategory = null; transactionMonth = null; transactionSearch = ""
@@ -1210,10 +1306,17 @@ fun AppNavigation(
             )
             DetailDestination.Connection -> ConnectionScreen(
                 onBack = { detail = DetailDestination.Main },
-                onBeforeBudgetReplacement = { repository.close() },
+                onBeforeBudgetReplacement = {
+                    if (!budgetReplacementInProgress) {
+                        budgetReplacementInProgress = true
+                        budgetReplacementCompleted = false
+                        repository.close()
+                    }
+                },
                 onBudgetInstalled = {
                     repositoryVersion += 1
                     dataVersion += 1
+                    if (budgetReplacementInProgress) budgetReplacementCompleted = true
                     CreditCardDueNotificationScheduler.refresh(context)
                 },
                 modifier = contentModifier,
@@ -1227,12 +1330,12 @@ fun AppNavigation(
                     creditCardsReturnToBills = false
                 },
                 onSave = { accountId, day, paymentDue, limit ->
-                    if (mutate("Saving credit card") { repository.setCreditCard(accountId, day, paymentDue, limit) }) {
+                    if (mutate(R.string.navigation_saving_credit_card) { repository.setCreditCard(accountId, day, paymentDue, limit) }) {
                         CreditCardDueNotificationScheduler.refresh(context)
                     }
                 },
                 onRemove = { accountId ->
-                    if (mutate("Removing credit card") { repository.setCreditCard(accountId, null) }) {
+                    if (mutate(R.string.navigation_removing_credit_card) { repository.setCreditCard(accountId, null) }) {
                         CreditCardDueNotificationScheduler.refresh(context)
                     }
                 },
@@ -1307,36 +1410,38 @@ fun AppNavigation(
                 scheduleOwnedRuleIds = remember(dataVersion) { repository.scheduleOwnedRuleIds() },
                 editorData = remember(dataVersion) { repository.ruleEditorData() },
                 onBack = { detail = DetailDestination.Main },
-                onSave = { rule -> mutate("Saving rule") { repository.saveRule(rule) } },
-                onDelete = { ruleId -> mutate("Deleting rule") { repository.deleteRule(ruleId) } },
+                onSave = { rule -> mutate(R.string.navigation_saving_rule) { repository.saveRule(rule) } },
+                onDelete = { ruleId -> mutate(R.string.navigation_deleting_rule) { repository.deleteRule(ruleId) } },
                 modifier = contentModifier,
             )
             DetailDestination.ManageCategories -> ManageCategoriesScreen(
                 groups = remember(dataVersion) { repository.categoryGroupsForReorder() },
                 onBack = { detail = DetailDestination.Main },
                 onReorderGroupsClick = { detail = DetailDestination.ReorderGroups },
-                onCreateGroup = { name -> mutate("Creating group") { repository.createCategoryGroup(name) } },
-                onRenameGroup = { group, name -> mutate("Renaming group") { repository.renameCategoryGroup(group, name) } },
+                onCreateGroup = { name -> mutate(R.string.navigation_creating_group) { repository.createCategoryGroup(name) } },
+                onRenameGroup = { group, name -> mutate(R.string.navigation_renaming_group) { repository.renameCategoryGroup(group, name) } },
                 onSetGroupHidden = { group, hidden ->
-                    mutate(if (hidden) "Hiding group" else "Showing group") { repository.setCategoryGroupHidden(group, hidden) }
+                    mutate(if (hidden) R.string.navigation_hiding_group else R.string.navigation_showing_group) {
+                        repository.setCategoryGroupHidden(group, hidden)
+                    }
                 },
-                onCreateCategory = { group, name -> mutate("Creating category") { repository.createCategory(group, name) } },
+                onCreateCategory = { group, name -> mutate(R.string.navigation_creating_category) { repository.createCategory(group, name) } },
                 onRenameCategory = { group, category, name ->
-                    mutate("Renaming category") { repository.renameCategory(group, category, name) }
+                    mutate(R.string.navigation_renaming_category) { repository.renameCategory(group, category, name) }
                 },
                 onSetCategoryHidden = { group, category, hidden ->
-                    mutate(if (hidden) "Hiding category" else "Showing category") {
+                    mutate(if (hidden) R.string.navigation_hiding_category else R.string.navigation_showing_category) {
                         repository.setCategoryHidden(group, category, hidden)
                     }
                 },
-                onDeleteCategory = { group, category -> mutate("Deleting category") { repository.deleteCategory(group, category) } },
-                onMoveCategory = { move -> mutate("Reordering category") { repository.moveCategory(move) } },
+                onDeleteCategory = { group, category -> mutate(R.string.navigation_deleting_category) { repository.deleteCategory(group, category) } },
+                onMoveCategory = { move -> mutate(R.string.navigation_reordering_category) { repository.moveCategory(move) } },
                 modifier = contentModifier,
             )
             DetailDestination.ReorderGroups -> ReorderGroupsScreen(
                 groups = remember(dataVersion) { repository.categoryGroupsForReorder() },
                 onBack = { detail = DetailDestination.ManageCategories },
-                onMoveGroup = { move -> mutate("Reordering category group") { repository.moveCategoryGroup(move) } },
+                onMoveGroup = { move -> mutate(R.string.navigation_reordering_category_group) { repository.moveCategoryGroup(move) } },
                 modifier = contentModifier,
             )
             DetailDestination.CustomizeHome -> CustomizeHomeScreen(
@@ -1365,7 +1470,9 @@ fun AppNavigation(
                         detail = DetailDestination.Main
                     },
                     onSave = { automations ->
-                        mutate("Saving automations") { repository.setCategoryAutomations(category.id.orEmpty(), automations) }
+                        mutate(R.string.navigation_saving_automations) {
+                            repository.setCategoryAutomations(category.id.orEmpty(), automations)
+                        }
                     },
                     modifier = contentModifier,
                 )
@@ -1392,20 +1499,20 @@ fun AppNavigation(
                     detail = DetailDestination.EditSchedule
                 },
                 onPost = { id, today ->
-                    mutate(if (today) "Posting schedule today" else "Posting schedule") {
+                    mutate(if (today) R.string.navigation_posting_schedule_today else R.string.navigation_posting_schedule) {
                         repository.postScheduleTransaction(id, today)
                     }
                 },
                 onSkip = { id ->
-                    mutate("Skipping next date") { repository.skipScheduleNextDate(id) }
+                    mutate(R.string.navigation_skipping_next_date) { repository.skipScheduleNextDate(id) }
                 },
                 onSetCompleted = { id, completed ->
-                    mutate(if (completed) "Completing schedule" else "Restarting schedule") {
+                    mutate(if (completed) R.string.navigation_completing_schedule else R.string.navigation_restarting_schedule) {
                         repository.setScheduleCompleted(id, completed)
                     }
                 },
                 onDelete = { id ->
-                    mutate("Deleting schedule") { repository.deleteSchedule(id) }
+                    mutate(R.string.navigation_deleting_schedule) { repository.deleteSchedule(id) }
                 },
                 modifier = contentModifier,
             )
@@ -1414,12 +1521,12 @@ fun AppNavigation(
                 writesSupported = repository.payeeLocationWritesSupported(),
                 onBack = { detail = DetailDestination.Main },
                 onDelete = { id ->
-                    if (mutate("Deleting payee location") { repository.deletePayeeLocation(id) }) {
+                    if (mutate(R.string.navigation_deleting_payee_location) { repository.deletePayeeLocation(id) }) {
                         dataVersion += 1
                     }
                 },
                 onClearPayee = { payeeId ->
-                    if (mutate("Clearing payee locations") {
+                    if (mutate(R.string.navigation_clearing_payee_locations) {
                             repository.clearPayeeLocations(payeeId) > 0
                         }) {
                         dataVersion += 1
@@ -1431,7 +1538,7 @@ fun AppNavigation(
                 accounts = accounts.filterNot { it.closed },
                 duplicateKeys = repository::importDuplicateKeys,
                 onImport = { accountId, candidates ->
-                    mutate("Importing transactions") {
+                    mutate(R.string.navigation_importing_transactions) {
                         repository.importTransactions(accountId, candidates) == candidates.size
                     }
                 },
@@ -1470,12 +1577,12 @@ fun AppNavigation(
                     detail = DetailDestination.EditSchedule
                 },
                 onPost = { id, today ->
-                    mutate(if (today) "Posting schedule today" else "Posting schedule") {
+                    mutate(if (today) R.string.navigation_posting_schedule_today else R.string.navigation_posting_schedule) {
                         repository.postScheduleTransaction(id, today)
                     }
                 },
-                onSkip = { id -> mutate("Skipping occurrence") { repository.skipScheduleNextDate(id) } },
-                onDelete = { id -> mutate("Deleting schedule") { repository.deleteSchedule(id) } },
+                onSkip = { id -> mutate(R.string.navigation_skipping_occurrence) { repository.skipScheduleNextDate(id) } },
+                onDelete = { id -> mutate(R.string.navigation_deleting_schedule) { repository.deleteSchedule(id) } },
                 modifier = contentModifier,
             )
             DetailDestination.FindSchedules -> {
@@ -1490,7 +1597,7 @@ fun AppNavigation(
                     hideDecimalPlaces = hideDecimalPlaces,
                     onBack = { detail = DetailDestination.Schedules },
                     onCreate = { selected ->
-                        if (mutate("Creating schedules") {
+                        if (mutate(R.string.navigation_creating_schedules) {
                             repository.createDiscoveredSchedules(selected)
                         }) {
                             detail = DetailDestination.Schedules
@@ -1510,7 +1617,7 @@ fun AppNavigation(
                     scheduleReturnsToBills = false
                 },
                 onSave = { fields, payeeName ->
-                    if (mutate("Creating schedule") {
+                    if (mutate(R.string.navigation_creating_schedule) {
                         repository.createSchedule(fields, payeeName)
                     }) {
                         detail = if (scheduleReturnsToBills) DetailDestination.BillsCalendar else DetailDestination.Schedules
@@ -1535,19 +1642,19 @@ fun AppNavigation(
                         returnFromEditSchedule()
                     },
                     onSave = { fields, payeeName ->
-                        if (mutate("Saving schedule") {
+                        if (mutate(R.string.navigation_saving_schedule) {
                             repository.updateSchedule(item.schedule.id, fields, payeeName)
                         }) {
                             returnFromEditSchedule()
                         }
                     },
                     onDelete = {
-                        if (mutate("Deleting schedule") { repository.deleteSchedule(item.schedule.id) }) {
+                        if (mutate(R.string.navigation_deleting_schedule) { repository.deleteSchedule(item.schedule.id) }) {
                             returnFromEditSchedule()
                         }
                     },
                     onUnlinkTransaction = { transactionId ->
-                        mutate("Unlinking transaction") {
+                        mutate(R.string.navigation_unlinking_transaction) {
                             repository.unlinkScheduleTransaction(item.schedule.id, transactionId)
                         }
                     },
@@ -1656,20 +1763,20 @@ fun AppNavigation(
                         WidgetUpdater.requestAll(context)
                     },
                     onSetCategoryHidden = { group, category, hidden ->
-                        mutate(if (hidden) "Hiding category" else "Showing category") {
+                        mutate(if (hidden) R.string.navigation_hiding_category else R.string.navigation_showing_category) {
                             repository.setCategoryHidden(group, category, hidden)
                         }
                     },
                     onSetGroupHidden = { group, hidden ->
-                        mutate(if (hidden) "Hiding group" else "Showing group") {
+                        mutate(if (hidden) R.string.navigation_hiding_group else R.string.navigation_showing_group) {
                             repository.setCategoryGroupHidden(group, hidden)
                         }
                     },
                     onRenameCategory = { group, category, name ->
-                        mutate("Renaming category") { repository.renameCategory(group, category, name) }
+                        mutate(R.string.navigation_renaming_category) { repository.renameCategory(group, category, name) }
                     },
                     onRenameGroup = { group, name ->
-                        mutate("Renaming group") { repository.renameCategoryGroup(group, name) }
+                        mutate(R.string.navigation_renaming_group) { repository.renameCategoryGroup(group, name) }
                     },
                     onShowCategoryTransactions = { category, thisMonth, returnToDetails ->
                         activeBudgetCategory = null
@@ -1681,45 +1788,63 @@ fun AppNavigation(
                         detail = DetailDestination.Transactions
                     },
                     onTransferBudget = { fromGroup, fromCategory, toGroup, toCategory, amount ->
-                        mutate("Moving budget") {
+                        mutate(R.string.navigation_moving_budget) {
                             repository.transferBudget(fromGroup, fromCategory, toGroup, toCategory, amount, budgetMonth)
                         }
                     },
                     onSetBudgetAmount = { group, category, amount ->
-                        mutate("Updating budget") { repository.setBudgetAmount(group, category, amount, budgetMonth) }
+                        mutate(R.string.navigation_updating_budget) {
+                            repository.setBudgetAmount(group, category, amount, budgetMonth)
+                        }
                     },
                     onSetCategoryNote = { categoryId, note ->
-                        mutate("Saving category note") { repository.setCategoryNote(categoryId, note) }
+                        mutate(R.string.navigation_saving_category_note) {
+                            repository.setCategoryNote(categoryId, note)
+                        }
                     },
                     onSetCategoryCarryover = { categoryId, enabled ->
-                        mutate("Updating rollover") { repository.setCategoryCarryover(categoryId, enabled, budgetMonth) }
+                        mutate(R.string.navigation_updating_rollover) {
+                            repository.setCategoryCarryover(categoryId, enabled, budgetMonth)
+                        }
                     },
                     onHoldForNextMonth = { amount ->
-                        mutate("Holding for next month") { repository.setBufferedAmount(budgetMonth, amount) }
+                        mutate(R.string.navigation_holding_for_next_month) {
+                            repository.setBufferedAmount(budgetMonth, amount)
+                        }
                     },
                     onResetNextMonthBuffer = {
-                        mutate("Resetting next month's buffer") { repository.resetNextMonthBuffer(budgetMonth) }
+                        mutate(R.string.navigation_resetting_next_month_buffer) {
+                            repository.resetNextMonthBuffer(budgetMonth)
+                        }
                     },
                     onCopyPreviousMonth = {
-                        mutate("Copying last month's budget") { repository.copyPreviousMonthBudget(budgetMonth) }
+                        mutate(R.string.navigation_copying_previous_month_budget) {
+                            repository.copyPreviousMonthBudget(budgetMonth)
+                        }
                     },
                     onEditAutomations = { _, category ->
                         editingAutomationCategory = category.name
                         detail = DetailDestination.BudgetAutomation
                     },
                     onApplyBudgetTemplate = { preview ->
-                        mutate("Applying budget template") { repository.applyBudgetTemplate(preview) }
+                        mutate(R.string.navigation_applying_budget_template) {
+                            repository.applyBudgetTemplate(preview)
+                        }
                     },
                     scheduleFunding = budgetScheduleFunding,
                     onPreviewCleanup = { repository.previewCleanup(budgetMonth) },
                     onApplyCleanup = { preview ->
-                        mutate("Applying month-end cleanup") { repository.applyCleanup(preview) }
+                        mutate(R.string.navigation_applying_month_end_cleanup) {
+                            repository.applyCleanup(preview)
+                        }
                     },
                     onSearch = { detail = DetailDestination.Search },
                     onManageCategories = { detail = DetailDestination.ManageCategories },
                     transactions = filteredTransactions,
                     onDeleteCategory = { group, category ->
-                        mutate("Deleting category") { repository.deleteCategory(group, category) }
+                        mutate(R.string.navigation_deleting_category) {
+                            repository.deleteCategory(group, category)
+                        }
                     },
                     onEditTransaction = { transaction ->
                         activeBudgetCategory = null
@@ -1732,7 +1857,9 @@ fun AppNavigation(
                         detail = DetailDestination.EditTransaction
                     },
                     onDeleteTransaction = { transaction ->
-                        mutate("Deleting transaction") { repository.deleteTransaction(transaction.id) }
+                        mutate(R.string.navigation_deleting_transaction) {
+                            repository.deleteTransaction(transaction.id)
+                        }
                     },
                     requestedCategoryDetails = reopenBudgetCategory,
                     onCategoryDetailsChange = { category ->
@@ -1766,18 +1893,24 @@ fun AppNavigation(
                         detail = DetailDestination.Transactions
                     },
                     onCloseAccount = { account ->
-                        mutate(if (account.closed) "Reopening account" else "Closing account") {
+                        mutate(if (account.closed) R.string.navigation_reopening_account else R.string.navigation_closing_account) {
                             repository.setAccountClosed(account.name, !account.closed)
                         }
                     },
                     onRenameAccount = { account, name ->
-                        mutate("Renaming account") { repository.renameAccount(account.name, name) }
+                        mutate(R.string.navigation_renaming_account) {
+                            repository.renameAccount(account.name, name)
+                        }
                     },
                     onChangeAccountType = { account, type ->
-                        mutate("Changing account type") { repository.setAccountType(account.name, type) }
+                        mutate(R.string.navigation_changing_account_type) {
+                            repository.setAccountType(account.name, type)
+                        }
                     },
                     onCreateAccount = { name, offBudget, balance, type ->
-                        mutate("Creating account") { repository.createAccount(name, offBudget, balance, type) }
+                        mutate(R.string.navigation_creating_account) {
+                            repository.createAccount(name, offBudget, balance, type)
+                        }
                     },
                     onSearch = { detail = DetailDestination.Search },
                     syncing = accountsSyncing || syncStatus.running,
@@ -1817,40 +1950,48 @@ fun AppNavigation(
                         hideReconciledTransactions = it
                     },
                     onSetCleared = { transaction, cleared ->
-                        mutate("Updating transaction") { repository.setTransactionCleared(transaction.id, cleared) }
+                        mutate(R.string.navigation_updating_transaction) {
+                            repository.setTransactionCleared(transaction.id, cleared)
+                        }
                     },
                     onReconcileAccount = { account ->
-                        mutate("Reconciling account") { repository.reconcileAccount(account.id) }
+                        mutate(R.string.navigation_reconciling_account) {
+                            repository.reconcileAccount(account.id)
+                        }
                     },
                     onCreateReconciliationAdjustment = { account, difference ->
-                        mutate("Creating reconciliation adjustment") {
+                        mutate(R.string.navigation_creating_reconciliation_adjustment) {
                             repository.createReconciliationAdjustment(account.id, difference)
                         }
                     },
                     onDelete = { transaction ->
-                        mutate("Deleting transaction") { repository.deleteTransaction(transaction.id) }
+                        mutate(R.string.navigation_deleting_transaction) {
+                            repository.deleteTransaction(transaction.id)
+                        }
                     },
                     onDeleteMultiple = { transactionsToDelete ->
-                        mutate("Deleting transactions") {
+                        mutate(R.string.navigation_deleting_transactions) {
                             repository.deleteTransactions(transactionsToDelete.map { it.id }) > 0
                         }
                     },
                     onDuplicate = { transaction ->
-                        mutate("Duplicating transaction") { repository.saveTransaction(transaction.asDuplicate()); true }
+                        mutate(R.string.navigation_duplicating_transaction) {
+                            repository.saveTransaction(transaction.asDuplicate()); true
+                        }
                     },
                     onDuplicateMultiple = { transactionsToDuplicate ->
-                        mutate("Duplicating transactions") {
+                        mutate(R.string.navigation_duplicating_transactions) {
                             transactionsToDuplicate.forEach { repository.saveTransaction(it.asDuplicate()) }
                             transactionsToDuplicate.isNotEmpty()
                         }
                     },
                     onLinkSchedule = { transactionsToLink, scheduleId ->
-                        mutate("Linking schedule") {
+                        mutate(R.string.navigation_linking_schedule) {
                             repository.linkScheduleTransactions(scheduleId, transactionsToLink.map { it.id }) > 0
                         }
                     },
                     onUnlinkSchedule = { transactionsToUnlink ->
-                        mutate("Unlinking schedule") {
+                        mutate(R.string.navigation_unlinking_schedule) {
                             repository.unlinkScheduleFromTransactions(transactionsToUnlink.map { it.id }) > 0
                         }
                     },
@@ -1864,6 +2005,8 @@ fun AppNavigation(
                     linkableSchedules = linkableSchedules,
                     showBackButton = false,
                     returnToRootRequest = rootRequests[MainDestination.Transactions] ?: 0,
+                    isRefreshing = transactionsRefreshing,
+                    onRefresh = ::refreshTransactions,
                 )
                 MainDestination.Manage -> SettingsScreen(
                     modifier = contentModifier,
@@ -1890,6 +2033,17 @@ fun AppNavigation(
                         displayPreferences.currencySymbolOnly = it
                         currencySymbolOnly = it
                         WidgetUpdater.requestAll(context)
+                    },
+                    languageTag = languageTag,
+                    onLanguageChange = { tag ->
+                        val locales = if (tag.isBlank()) {
+                            LocaleListCompat.getEmptyLocaleList()
+                        } else {
+                            LocaleListCompat.forLanguageTags(tag)
+                        }
+                        AppCompatDelegate.setApplicationLocales(locales)
+                        WidgetUpdater.requestAll(context)
+                        CreditCardDueNotificationScheduler.refresh(context)
                     },
                     dateFormat = dateFormat,
                     onDateFormatChange = {
@@ -1977,6 +2131,8 @@ fun AppNavigation(
         }
         }
     }
+    if (budgetReplacementInProgress) BudgetSwitchOverlay()
+    }
 }
 
 @Composable
@@ -1986,11 +2142,14 @@ private fun NoBudgetScreen(modifier: Modifier, onConnect: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("No budget open", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
         Text(
-            "Connect to your Actual server and download a budget to begin.",
+            stringResource(R.string.navigation_no_budget_title),
+            style = androidx.compose.material3.MaterialTheme.typography.headlineSmall,
+        )
+        Text(
+            stringResource(R.string.navigation_no_budget_message),
             modifier = Modifier.padding(top = 8.dp, bottom = 20.dp),
         )
-        Button(onClick = onConnect) { Text("Connect to Actual") }
+        Button(onClick = onConnect) { Text(stringResource(R.string.navigation_connect_to_actual)) }
     }
 }

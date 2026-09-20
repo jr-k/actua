@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_listener_label">Importation de transactions bancaires</string>
+    <string name="widget_budget_snapshot">Aperçu du budget</string>
+    <string name="widget_favourite_categories">Catégories favorites</string>
+    <string name="widget_quick_transaction">Transaction rapide</string>
+    <string name="widget_account_balances">Soldes des comptes</string>
+    <string name="widget_ready">Disponible à budgéter</string>
+    <string name="widget_budgeted">Budgété</string>
+    <string name="widget_balance">Solde</string>
+    <string name="widget_expense">− Dépense</string>
+    <string name="widget_income">+ Revenu</string>
+    <string name="widget_transfer">⇄ Virement</string>
+    <string name="widget_no_budget">Ouvrez Actua pour sélectionner un budget</string>
+    <string name="widget_no_categories">Aucune catégorie disponible</string>
+    <string name="widget_no_accounts">Aucun compte disponible</string>
+    <string name="widget_upcoming_schedules">Échéances à venir</string>
+    <string name="widget_no_schedules">Aucune transaction planifiée à venir</string>
+    <string name="shortcut_add_expense">Ajouter une dépense</string>
+    <string name="shortcut_add_income">Ajouter un revenu</string>
+    <string name="shortcut_add_transfer">Ajouter un virement</string>
+    <string name="shortcut_search">Rechercher</string>
+    <string name="shortcut_unavailable">Ouvrez Actua pour utiliser cette action</string>
+
+    <string name="disconnect_reset_title">Se déconnecter et réinitialiser ?</string>
+    <string name="disconnect_reset_message">Actua synchronisera tous les budgets téléchargés depuis le serveur, puis supprimera de cet appareil les budgets téléchargés, les sauvegardes locales, les clés de chiffrement et les données de connexion. Vos budgets sur le serveur Actual ne seront pas supprimés. Les réglages d’affichage de l’appareil et le budget de démonstration local seront conservés.</string>
+    <string name="disconnect_reset_action">Se déconnecter et réinitialiser</string>
+    <string name="widget_action_cancel">Annuler</string>
+    <string name="disconnect_syncing_title">Synchronisation avant la déconnexion</string>
+    <string name="disconnect_syncing_message">Enregistrement des dernières modifications Actual et Actua de tous les budgets téléchargés depuis le serveur avant la suppression des données locales.</string>
+    <string name="disconnect_sync_failed_title">Impossible de synchroniser les dernières modifications</string>
+    <string name="disconnect_sync_failed_message">Actua n’a supprimé aucune donnée budgétaire locale. Si vous vous déconnectez quand même, les modifications qui n’ont pas atteint votre serveur Actual risquent d’être définitivement perdues.</string>
+    <string name="disconnect_anyway">Se déconnecter quand même</string>
+    <string name="disconnect_try_again">Réessayer</string>
+    <string name="disconnect_error_sync_failed">Échec de la synchronisation.</string>
+    <string name="disconnect_error_missing_server_identity">%1$s n’a aucune identité serveur et ne peut pas être supprimé en toute sécurité après la synchronisation.</string>
+    <string name="disconnect_error_not_configured">%1$s n’est pas configuré pour la synchronisation avec le serveur.</string>
+    <string name="disconnect_error_encryption_locked">%1$s est chiffré et verrouillé. Déverrouillez-le avant de vous déconnecter, ou déconnectez-vous quand même.</string>
+    <string name="disconnect_error_reset_failed">Impossible de réinitialiser les données Actua locales.</string>
+
+    <string name="widget_off_budget">Hors budget</string>
+    <string name="widget_add">Ajouter le widget</string>
+    <string name="widget_choose_categories">Choisissez jusqu’à quatre catégories à ajouter à vos favoris partagés.</string>
+    <string name="widget_choose_accounts">Choisissez jusqu’à quatre comptes.</string>
+    <string name="widget_no_available_items">Aucun élément disponible dans le budget ouvert.</string>
+    <string name="widget_schedule_period_prompt">Afficher les transactions planifiées arrivant à échéance dans les :</string>
+    <plurals name="widget_period_days">
+        <item quantity="one">%d jour</item>
+        <item quantity="many">%d jours</item>
+        <item quantity="other">%d jours</item>
+    </plurals>
+    <string name="widget_due_today">Aujourd’hui</string>
+    <string name="widget_due_tomorrow">Demain</string>
+    <plurals name="widget_due_in_days">
+        <item quantity="one">Dans %d jour</item>
+        <item quantity="many">Dans %d jours</item>
+        <item quantity="other">Dans %d jours</item>
+    </plurals>
+    <plurals name="widget_days_overdue">
+        <item quantity="one">En retard de %d jour</item>
+        <item quantity="many">En retard de %d jours</item>
+        <item quantity="other">En retard de %d jours</item>
+    </plurals>
+
+    <string name="credit_card_due_channel_name">Échéances de cartes de crédit</string>
+    <string name="credit_card_due_channel_description">Rappels de paiement pour les cartes de crédit suivies</string>
+    <string name="credit_card_due_tomorrow">demain</string>
+    <plurals name="credit_card_due_in_days">
+        <item quantity="one">dans %d jour</item>
+        <item quantity="many">dans %d jours</item>
+        <item quantity="other">dans %d jours</item>
+    </plurals>
+    <string name="credit_card_notification_title">Paiement de %1$s dû %2$s</string>
+    <string name="credit_card_notification_body">Solde actuel : %1$s. Paiement dû le %2$s.</string>
+    <string name="credit_card_due_today">Échéance aujourd’hui</string>
+    <string name="credit_card_due_tomorrow_summary">Échéance demain</string>
+    <string name="credit_card_due_date">Échéance le %1$s (%2$d j)</string>
+    <plurals name="credit_card_due_in_days_short">
+        <item quantity="one">Échéance dans %d jour</item>
+        <item quantity="many">Échéance dans %d jours</item>
+        <item quantity="other">Échéance dans %d jours</item>
+    </plurals>
+</resources>

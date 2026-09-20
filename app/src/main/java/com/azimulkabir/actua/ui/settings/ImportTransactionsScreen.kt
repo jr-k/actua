@@ -37,7 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.importing.CsvTransactionCandidateSource
 import com.azimulkabir.actua.data.importing.ImportCandidate
 import com.azimulkabir.actua.data.importing.ImportColumnMapping
@@ -46,6 +50,7 @@ import com.azimulkabir.actua.data.importing.ImportDuplicateDetector
 import com.azimulkabir.actua.data.importing.ImportHistoryEntry
 import com.azimulkabir.actua.data.importing.ImportPreferences
 import com.azimulkabir.actua.data.importing.ImportProblem
+import com.azimulkabir.actua.data.importing.ImportProblemCode
 import com.azimulkabir.actua.data.importing.ImportTable
 import com.azimulkabir.actua.data.importing.ImportConfidence
 import com.azimulkabir.actua.data.importing.FinancialMessageParser
@@ -63,6 +68,9 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.time.LocalDate
 
+private class SelectedStatementUnreadableException : Exception()
+private class StatementTooLargeException : Exception()
+
 private data class ReviewRow(
     val sourceRow: Int,
     val date: String,
@@ -72,7 +80,7 @@ private data class ReviewRow(
     val reference: String?,
     val selected: Boolean,
     val confidence: ImportConfidence = ImportConfidence.HIGH,
-    val sourceLabel: String = "Statement",
+    val sourceLabel: String,
 )
 
 @Composable
@@ -86,6 +94,7 @@ fun ImportTransactionsScreen(
     onSharedTextConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val rows = remember { mutableStateListOf<ReviewRow>() }
     var account by remember { mutableStateOf(accounts.firstOrNull()) }
@@ -133,7 +142,7 @@ fun ImportTransactionsScreen(
                 candidate.reference, selected = !duplicate, candidate.confidence, candidate.sourceLabel)
         }
         problems = parseProblems
-        message = if (rows.isEmpty()) "No valid transactions found." else null
+        message = if (rows.isEmpty()) resources.getString(R.string.no_valid_transactions_found) else null
     }
 
     fun review(parsedTable: ImportTable, selectedMapping: ImportColumnMapping) {
@@ -150,7 +159,7 @@ fun ImportTransactionsScreen(
 
     LaunchedEffect(initialSharedText) {
         initialSharedText?.takeIf(String::isNotBlank)?.let {
-            reviewText(it, "Shared message", StatementFormat.SHARED_TEXT)
+            reviewText(it, resources.getString(R.string.shared_message), StatementFormat.SHARED_TEXT)
             onSharedTextConsumed()
         }
     }
@@ -160,21 +169,31 @@ fun ImportTransactionsScreen(
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
                 val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                    ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null } ?: "statement.csv"
+                    ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                    ?: resources.getString(R.string.default_statement_filename)
                 val format = when (name.substringAfterLast('.', "").lowercase()) {
                     "xlsx" -> StatementFormat.XLSX
                     "pdf" -> StatementFormat.PDF
                     else -> StatementFormat.CSV
                 }
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readLimitedStatement() }
-                    ?: error("Could not read the selected file")
+                val bytes = context.contentResolver.openInputStream(uri)?.use {
+                    it.readLimitedStatement()
+                } ?: throw SelectedStatementUnreadableException()
                 Triple(name, format, StatementDocumentReader.read(context, bytes, format))
             } }.onSuccess { (name, format, parsedTable) ->
                     sourceName = name; sourceFormat = format; table = parsedTable
                     val suggested = CsvTransactionCandidateSource.suggestedMapping(parsedTable.headers)
                     profileName = ""
                     review(parsedTable, suggested)
-                }.onFailure { message = it.message ?: "Could not parse this statement." }
+                }.onFailure {
+                    message = resources.getString(
+                        when (it) {
+                            is SelectedStatementUnreadableException -> R.string.could_not_read_selected_file
+                            is StatementTooLargeException -> R.string.statement_too_large
+                            else -> R.string.could_not_parse_statement
+                        },
+                    )
+                }
             busy = false
         }
     }
@@ -183,26 +202,26 @@ fun ImportTransactionsScreen(
     }
 
     Column(modifier.fillMaxSize()) {
-        ActuaScreenHeader(title = "Import transactions", onBack = onBack)
+        ActuaScreenHeader(title = stringResource(R.string.import_transactions_title), onBack = onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-            Text("CSV, XLSX, and text-based PDF files stay on this device. Every valid row is shown for review before anything is saved.",
+            Text(stringResource(R.string.import_transactions_privacy),
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(pastedText, { pastedText = it }, label = { Text("Paste SMS or email alert") },
+            OutlinedTextField(pastedText, { pastedText = it }, label = { Text(stringResource(R.string.paste_financial_alert)) },
                 minLines = 3, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(enabled = pastedText.isNotBlank(), onClick = {
-                    reviewText(pastedText, "Pasted message", StatementFormat.SHARED_TEXT)
-                }) { Text("Review text") }
+                    reviewText(pastedText, resources.getString(R.string.pasted_message), StatementFormat.SHARED_TEXT)
+                }) { Text(stringResource(R.string.review_text)) }
                 if (queued.isNotEmpty()) TextButton(onClick = {
-                    sourceName = "Captured notifications"; sourceFormat = StatementFormat.NOTIFICATION
+                    sourceName = resources.getString(R.string.captured_notifications); sourceFormat = StatementFormat.NOTIFICATION
                     table = null; mapping = null; reviewCandidates(queued, emptyList())
-                }) { Text("Review captured (${queued.size})") }
+                }) { Text(pluralStringResource(R.plurals.review_captured, queued.size, queued.size)) }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Capture future bank notifications", Modifier.weight(1f))
+                Text(stringResource(R.string.capture_bank_notifications), Modifier.weight(1f))
                 Switch(captureEnabled, { enabled ->
                     if (enabled && allowedPackages.isEmpty()) {
-                        message = "Select at least one app before enabling capture."
+                        message = resources.getString(R.string.select_app_before_capture)
                         appMenu = true
                     } else {
                         captureEnabled = enabled; notificationPreferences.enabled = enabled
@@ -212,7 +231,8 @@ fun ImportTransactionsScreen(
             }
             Box(Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = { appMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (allowedPackages.isEmpty()) "Select notification apps" else "Selected notification apps: ${allowedPackages.size}")
+                    Text(if (allowedPackages.isEmpty()) stringResource(R.string.select_notification_apps)
+                    else pluralStringResource(R.plurals.selected_notification_apps, allowedPackages.size, allowedPackages.size))
                 }
                 DropdownMenu(appMenu, { appMenu = false }) {
                     notificationApps.forEach { (packageName, label) ->
@@ -234,33 +254,36 @@ fun ImportTransactionsScreen(
                     }
                 }
             }
-            Text("Optional notification access processes alerts on-device and stores only recognized candidates, not raw notifications.",
+            Text(stringResource(R.string.notification_access_description),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(debitKeywords, { debitKeywords = it }, label = { Text("Debit keywords") },
+            OutlinedTextField(debitKeywords, { debitKeywords = it }, label = { Text(stringResource(R.string.debit_keywords)) },
                 modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(creditKeywords, { creditKeywords = it }, label = { Text("Credit keywords") },
+            OutlinedTextField(creditKeywords, { creditKeywords = it }, label = { Text(stringResource(R.string.credit_keywords)) },
                 modifier = Modifier.fillMaxWidth())
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = {
                     val debit = debitKeywords.split(',').map { it.trim().lowercase() }.filter(String::isNotBlank).toSet()
                     val credit = creditKeywords.split(',').map { it.trim().lowercase() }.filter(String::isNotBlank).toSet()
-                    if (debit.isEmpty() || credit.isEmpty()) message = "Keep at least one debit and credit keyword."
+                    if (debit.isEmpty() || credit.isEmpty()) message = resources.getString(R.string.keep_debit_credit_keyword)
                     else {
                         notificationPreferences.saveProfile(FinancialMessageProfile(debit, credit))
-                        message = "Saved message parser keywords."
+                        message = resources.getString(R.string.saved_parser_keywords)
                     }
-                }) { Text("Save parser words") }
+                }) { Text(stringResource(R.string.save_parser_words)) }
                 TextButton(onClick = {
                     notificationPreferences.clearAll(); captureEnabled = false; queued = emptyList()
-                    message = "Deleted captured candidates and parser settings."
-                }) { Text("Delete notification data") }
+                    message = resources.getString(R.string.deleted_notification_data)
+                }) { Text(stringResource(R.string.delete_notification_data)) }
             }
             Box(Modifier.fillMaxWidth().padding(top = 16.dp)) {
                 OutlinedButton(onClick = { accountMenu = true }, enabled = accounts.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-                    Text(account?.name ?: "No open account")
+                    Text(account?.name?.ifBlank { stringResource(R.string.fs_unknown_account) }
+                        ?: stringResource(R.string.no_open_account))
                 }
                 DropdownMenu(expanded = accountMenu, onDismissRequest = { accountMenu = false }) {
-                    accounts.forEach { option -> DropdownMenuItem(text = { Text(option.name) }, onClick = {
+                    accounts.forEach { option -> DropdownMenuItem(
+                        text = { Text(option.name.ifBlank { stringResource(R.string.fs_unknown_account) }) },
+                        onClick = {
                         account = option; accountMenu = false
                     }) }
                 }
@@ -268,17 +291,19 @@ fun ImportTransactionsScreen(
             Button(onClick = { picker.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/pdf")) },
                 enabled = !busy && account != null, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-                Text(if (busy) "Reading…" else "Choose statement file")
+                Text(if (busy) stringResource(R.string.reading) else stringResource(R.string.choose_statement_file))
             }
             val activeTable = table
             val activeMapping = mapping
             if (activeTable != null && activeMapping != null) {
-                Text("Column mapping", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.column_mapping), style = MaterialTheme.typography.titleMedium)
                 activeTable.headers.forEachIndexed { index, header ->
                     Box(Modifier.fillMaxWidth()) {
                         OutlinedButton(onClick = { mappingMenuIndex = index }, modifier = Modifier.fillMaxWidth()) {
                             val role = activeMapping.roles.getOrElse(index) { ImportColumnRole.IGNORE }
-                            Text("${header.ifBlank { "Column ${index + 1}" }}: ${role.displayName()}")
+                            Text(stringResource(R.string.column_role,
+                                header.ifBlank { stringResource(R.string.column_number, index + 1) },
+                                role.displayName()))
                         }
                         DropdownMenu(expanded = mappingMenuIndex == index, onDismissRequest = { mappingMenuIndex = null }) {
                             ImportColumnRole.entries.forEach { role ->
@@ -292,28 +317,31 @@ fun ImportTransactionsScreen(
                     }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Expenses are positive", Modifier.weight(1f))
+                    Text(stringResource(R.string.expenses_are_positive), Modifier.weight(1f))
                     Switch(checked = activeMapping.expensesArePositive, onCheckedChange = {
                         review(activeTable, activeMapping.copy(expensesArePositive = it))
                     })
                 }
                 Box(Modifier.fillMaxWidth()) {
                     OutlinedButton(onClick = { datePatternMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Date format: ${activeMapping.datePattern}")
+                        Text(stringResource(R.string.date_format,
+                            if (activeMapping.datePattern == "Auto") stringResource(R.string.automatic) else activeMapping.datePattern))
                     }
                     DropdownMenu(datePatternMenu, { datePatternMenu = false }) {
                         listOf("Auto", "yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy", "dd-MM-yyyy", "dd MMM yyyy")
-                            .forEach { pattern -> DropdownMenuItem(text = { Text(pattern) }, onClick = {
+                            .forEach { pattern -> DropdownMenuItem(text = {
+                                Text(if (pattern == "Auto") stringResource(R.string.automatic) else pattern)
+                            }, onClick = {
                                 datePatternMenu = false; review(activeTable, activeMapping.copy(datePattern = pattern))
                             }) }
                     }
                 }
-                OutlinedTextField(profileName, { profileName = it }, label = { Text("Mapping profile name") },
+                OutlinedTextField(profileName, { profileName = it }, label = { Text(stringResource(R.string.mapping_profile_name)) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
                 Row {
                     Box {
                         TextButton(enabled = importPreferences.profileNames().isNotEmpty(), onClick = { profileMenu = true }) {
-                            Text("Load profile")
+                            Text(stringResource(R.string.load_profile))
                         }
                         DropdownMenu(profileMenu, { profileMenu = false }) {
                             importPreferences.profileNames().forEach { name -> DropdownMenuItem(text = { Text(name) }, onClick = {
@@ -321,27 +349,29 @@ fun ImportTransactionsScreen(
                                 profileMenu = false
                                 if (saved?.roles?.size == activeTable.headers.size) {
                                     profileName = name; review(activeTable, saved)
-                                } else message = "That profile has a different number of columns."
+                                } else message = resources.getString(R.string.profile_column_count_mismatch)
                             }) }
                         }
                     }
                     TextButton(enabled = profileName.isNotBlank(), onClick = {
                         importPreferences.saveProfile(profileName.trim(), activeMapping)
-                        message = "Saved mapping profile ${profileName.trim()}."
-                    }) { Text("Save profile") }
+                        message = resources.getString(R.string.saved_mapping_profile, profileName.trim())
+                    }) { Text(stringResource(R.string.save_profile)) }
                 }
             }
             if (problems.isNotEmpty()) Text(
-                "${problems.size} malformed row${if (problems.size == 1) " was" else "s were"} excluded. " +
-                    problems.take(3).joinToString { "Row ${it.sourceRow}: ${it.message}" },
+                pluralStringResource(R.plurals.malformed_rows_excluded, problems.size, problems.size) + " " +
+                    problems.take(3).map {
+                        stringResource(R.string.row_problem, it.sourceRow, it.displayMessage())
+                    }.joinToString(),
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             message?.let { Text(it, modifier = Modifier.padding(bottom = 8.dp)) }
             if (history.isNotEmpty()) {
-                Text("Recent imports", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.recent_imports), style = MaterialTheme.typography.titleMedium)
                 history.take(3).forEach { entry ->
-                    Text("${entry.sourceName}: ${entry.imported} imported, ${entry.skipped} skipped · ${entry.accountName}",
+                    Text(stringResource(R.string.import_history_entry, entry.sourceName, entry.imported, entry.skipped, entry.accountName),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -355,28 +385,32 @@ fun ImportTransactionsScreen(
                     } == true
                 })
                 val duplicateReason = when {
-                    candidateKey != null && candidateKey in existingKeys -> "Already in this account"
-                    duplicate -> "Repeated in this file"
+                    candidateKey != null && candidateKey in existingKeys -> stringResource(R.string.already_in_account)
+                    duplicate -> stringResource(R.string.repeated_in_file)
                     else -> null
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = row.selected, onCheckedChange = { rows[index] = row.copy(selected = it) })
-                    Text("${sourceFormat.name} row ${row.sourceRow}", style = MaterialTheme.typography.labelLarge)
-                    if (duplicateReason != null) Text("  $duplicateReason", color = MaterialTheme.colorScheme.error,
+                    Text(stringResource(R.string.format_row, sourceFormat.displayName(), row.sourceRow), style = MaterialTheme.typography.labelLarge)
+                    if (duplicateReason != null) Text(stringResource(R.string.duplicate_reason, duplicateReason), color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.labelMedium)
                 }
-                Text("${row.confidence.name.lowercase().replaceFirstChar(Char::uppercase)} confidence · ${row.sourceLabel}",
+                Text(stringResource(
+                    R.string.confidence_source,
+                    row.confidence.displayName(),
+                    if (row.sourceLabel == "Statement") stringResource(R.string.statement_source) else row.sourceLabel,
+                ),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedTextField(row.date, { rows[index] = row.copy(date = it) }, label = { Text("Date (YYYY-MM-DD)") },
+                OutlinedTextField(row.date, { rows[index] = row.copy(date = it) }, label = { Text(stringResource(R.string.date_iso_label)) },
                     isError = invalid, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(row.payee, { rows[index] = row.copy(payee = it) }, label = { Text("Payee") },
+                OutlinedTextField(row.payee, { rows[index] = row.copy(payee = it) }, label = { Text(stringResource(R.string.payee)) },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(row.amount, { rows[index] = row.copy(amount = it) }, label = { Text("Signed amount") },
+                OutlinedTextField(row.amount, { rows[index] = row.copy(amount = it) }, label = { Text(stringResource(R.string.signed_amount)) },
                     isError = invalid, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(row.notes, { rows[index] = row.copy(notes = it) }, label = { Text("Notes") },
+                OutlinedTextField(row.notes, { rows[index] = row.copy(notes = it) }, label = { Text(stringResource(R.string.notes)) },
                     modifier = Modifier.fillMaxWidth())
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { rows.removeAt(index) }) { Text("Reject") }
+                    TextButton(onClick = { rows.removeAt(index) }) { Text(stringResource(R.string.reject)) }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
@@ -387,7 +421,7 @@ fun ImportTransactionsScreen(
             onClick = {
                 val target = account ?: return@Button
                 if (onImport(target.id, ready)) {
-                    message = "Imported ${ready.size} transaction${if (ready.size == 1) "" else "s"}."
+                    message = resources.getQuantityString(R.plurals.imported_transactions, ready.size, ready.size)
                     importPreferences.addHistory(ImportHistoryEntry(sourceName, sourceFormat, target.name,
                         ready.size, rows.size - ready.size, System.currentTimeMillis()))
                     history = importPreferences.history()
@@ -399,15 +433,69 @@ fun ImportTransactionsScreen(
             },
             enabled = selected.isNotEmpty() && ready.size == selected.size,
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-        ) { Text("Approve and import ${ready.size}") }
+        ) { Text(pluralStringResource(R.plurals.approve_and_import, ready.size, ready.size)) }
         if (history.isNotEmpty()) {
             TextButton(onClick = { importPreferences.clearHistory(); history = emptyList() },
-                modifier = Modifier.align(Alignment.End)) { Text("Clear import history (${history.size})") }
+                modifier = Modifier.align(Alignment.End)) {
+                Text(pluralStringResource(R.plurals.clear_import_history, history.size, history.size))
+            }
         }
     }
 }
 
-private fun ImportColumnRole.displayName() = name.lowercase().replaceFirstChar(Char::uppercase)
+@Composable
+private fun ImportColumnRole.displayName() = stringResource(when (this) {
+    ImportColumnRole.IGNORE -> R.string.column_role_ignore
+    ImportColumnRole.DATE -> R.string.column_role_date
+    ImportColumnRole.PAYEE -> R.string.column_role_payee
+    ImportColumnRole.NOTES -> R.string.column_role_notes
+    ImportColumnRole.REFERENCE -> R.string.column_role_reference
+    ImportColumnRole.AMOUNT -> R.string.column_role_amount
+    ImportColumnRole.DEBIT -> R.string.column_role_debit
+    ImportColumnRole.CREDIT -> R.string.column_role_credit
+})
+
+@Composable
+private fun ImportConfidence.displayName() = stringResource(when (this) {
+    ImportConfidence.HIGH -> R.string.confidence_high
+    ImportConfidence.MEDIUM -> R.string.confidence_medium
+    ImportConfidence.LOW -> R.string.confidence_low
+})
+
+@Composable
+private fun StatementFormat.displayName() = stringResource(when (this) {
+    StatementFormat.CSV -> R.string.statement_format_csv
+    StatementFormat.XLSX -> R.string.statement_format_xlsx
+    StatementFormat.PDF -> R.string.statement_format_pdf
+    StatementFormat.SHARED_TEXT -> R.string.statement_format_shared_text
+    StatementFormat.NOTIFICATION -> R.string.statement_format_notification
+})
+
+@Composable
+private fun ImportProblem.displayMessage(): String = when (code) {
+    ImportProblemCode.FILE_EMPTY -> stringResource(R.string.import_problem_file_empty)
+    ImportProblemCode.MISSING_REQUIRED_COLUMNS -> {
+        val columns = detail.orEmpty().split(',').filter(String::isNotBlank).map { column ->
+            stringResource(when (column) {
+                "date" -> R.string.import_column_date
+                "payee" -> R.string.import_column_payee
+                else -> R.string.import_column_amount
+            })
+        }.joinToString()
+        stringResource(R.string.import_problem_missing_columns, columns)
+    }
+    ImportProblemCode.PAYEE_BLANK -> stringResource(R.string.import_problem_payee_blank)
+    ImportProblemCode.AMOUNT_BLANK -> stringResource(R.string.import_problem_amount_blank)
+    ImportProblemCode.AMOUNT_BLANK_OR_ZERO -> stringResource(R.string.import_problem_amount_blank_or_zero)
+    ImportProblemCode.INVALID_AMOUNT -> stringResource(R.string.import_problem_invalid_amount)
+    ImportProblemCode.UNSUPPORTED_DATE -> stringResource(R.string.import_problem_unsupported_date, detail.orEmpty())
+    ImportProblemCode.UNCLOSED_QUOTED_FIELD -> stringResource(R.string.import_problem_unclosed_quote)
+    ImportProblemCode.DEBIT_OR_CREDIT_NOT_RECOGNIZED ->
+        stringResource(R.string.import_problem_direction_not_recognized)
+    ImportProblemCode.TRANSACTION_AMOUNT_NOT_RECOGNIZED ->
+        stringResource(R.string.import_problem_transaction_amount_not_recognized)
+    ImportProblemCode.ROW_COULD_NOT_BE_PARSED -> stringResource(R.string.import_problem_row_parse)
+}
 
 private fun ReviewRow.toCandidateOrNull(): ImportCandidate? = runCatching {
     val parsedDate = LocalDate.parse(date.trim())
@@ -425,7 +513,7 @@ private fun InputStream.readLimitedStatement(maxBytes: Int = 25 * 1024 * 1024): 
     while (true) {
         val count = read(buffer)
         if (count < 0) break
-        require(output.size() + count <= maxBytes) { "Statements larger than 25 MB are not supported" }
+        if (output.size() + count > maxBytes) throw StatementTooLargeException()
         output.write(buffer, 0, count)
     }
     return output.toByteArray()

@@ -26,12 +26,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.layout.navigationBarsPadding
+import com.azimulkabir.actua.R
 
 @Composable
 fun CalculatorAmountSheet(
@@ -121,7 +123,7 @@ fun CompactCalculatorPad(
             ) {
                 onClose?.let {
                     IconButton(onClick = it, modifier = Modifier.height(38.dp).width(38.dp)) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Close calculator")
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.calculator_close))
                     }
                 }
                 Spacer(Modifier.weight(1f))

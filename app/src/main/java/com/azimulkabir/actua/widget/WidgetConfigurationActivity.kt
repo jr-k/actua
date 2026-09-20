@@ -5,9 +5,9 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,8 +36,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.ActuaRepository
 import com.azimulkabir.actua.data.budget.ActiveBudgetStore
 import com.azimulkabir.actua.data.preferences.FavoritePreferences
@@ -48,7 +50,7 @@ import kotlinx.coroutines.withContext
 
 data class WidgetChoice(val id: String, val name: String, val subtitle: String)
 
-class WidgetConfigurationActivity : ComponentActivity() {
+class WidgetConfigurationActivity : AppCompatActivity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,7 +104,11 @@ class WidgetConfigurationActivity : ComponentActivity() {
                         category.id?.let { WidgetChoice(it, category.name, group.name) }
                     } }
                 WidgetKind.Accounts -> repository.accounts().filterNot { it.closed }.map {
-                    WidgetChoice(it.id, it.name, if (it.offBudget) "Off budget" else it.type)
+                    WidgetChoice(
+                        it.id,
+                        it.name,
+                        if (it.offBudget) getString(R.string.widget_off_budget) else it.type,
+                    )
                 }
             }
         } finally {
@@ -156,9 +162,16 @@ private fun WidgetConfigurationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (kind == WidgetKind.Categories) "Favourite categories" else "Account balances") },
+                title = {
+                    Text(stringResource(
+                        if (kind == WidgetKind.Categories) R.string.widget_favourite_categories
+                        else R.string.widget_account_balances,
+                    ))
+                },
                 navigationIcon = {
-                    IconButton(onClick = onCancel) { Icon(Icons.Outlined.Close, contentDescription = "Cancel") }
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.widget_action_cancel))
+                    }
                 },
             )
         },
@@ -167,7 +180,7 @@ private fun WidgetConfigurationScreen(
                 onClick = { onSave(selected) },
                 enabled = selected.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-            ) { Text("Add widget") }
+            ) { Text(stringResource(R.string.widget_add)) }
         },
     ) { padding ->
         val loaded = choices
@@ -181,14 +194,18 @@ private fun WidgetConfigurationScreen(
             LazyColumn(Modifier.fillMaxSize().padding(padding)) {
                 item {
                     Text(
-                        if (kind == WidgetKind.Categories) "Choose up to four categories to add to your shared favorites."
-                        else "Choose up to four accounts.",
+                        stringResource(
+                            if (kind == WidgetKind.Categories) R.string.widget_choose_categories
+                            else R.string.widget_choose_accounts,
+                        ),
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
                 if (loaded.isEmpty()) {
-                    item { Text("No available items in the open budget.", Modifier.padding(20.dp)) }
+                    item {
+                        Text(stringResource(R.string.widget_no_available_items), Modifier.padding(20.dp))
+                    }
                 }
                 items(loaded, key = { it.id }) { choice ->
                     val checked = choice.id in selected
@@ -204,8 +221,14 @@ private fun WidgetConfigurationScreen(
                             },
                         )
                         Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                            Text(choice.name, style = MaterialTheme.typography.bodyLarge)
-                            Text(choice.subtitle, style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                choice.name.ifBlank { stringResource(R.string.common_unknown) },
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Text(
+                                choice.subtitle.ifBlank { stringResource(R.string.common_unknown) },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
                     }
                 }

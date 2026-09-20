@@ -1,5 +1,10 @@
 package com.azimulkabir.actua.model
 
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.schedules.DayDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -113,20 +118,27 @@ data class CreditCardCycle(
         return cycles
     }
 
+    @Composable
     fun dueSummary(today: DayDate = DayDate.today()): String = when (val days = daysUntilDue(today)) {
-        0 -> "Due today"
-        1 -> "Due tomorrow"
+        0 -> stringResource(R.string.credit_card_due_today)
+        1 -> stringResource(R.string.credit_card_due_tomorrow_summary)
         else -> {
             val due = upcomingDueDate(today)
+            val locale = LocalConfiguration.current.locales[0]
             val formatted = java.time.LocalDate.of(due.year, due.month, due.day)
-                .format(DateTimeFormatter.ofPattern("dd-MMM-yy", Locale.ENGLISH))
-            "Due $formatted (${days}d)"
+                .format(DateTimeFormatter.ofPattern("dd-MMM-yy", locale))
+            stringResource(R.string.credit_card_due_date, formatted, days)
         }
     }
 
+    @Composable
     fun dueShortSummary(today: DayDate = DayDate.today()): String {
         val days = daysUntilDue(today)
-        return if (days <= 1) dueSummary(today) else "Due in ${days}d"
+        return if (days <= 1) {
+            dueSummary(today)
+        } else {
+            pluralStringResource(R.plurals.credit_card_due_in_days_short, days, days)
+        }
     }
 
     /** A closed billing cycle's date range and the payment due date for its statement. */

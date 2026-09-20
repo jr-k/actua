@@ -8,12 +8,50 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 
+internal data class DemoBudgetLabels(
+    val budgetName: String,
+    val checkingAccount: String,
+    val savingsAccount: String,
+    val creditAccount: String,
+    val investmentAccount: String,
+    val incomeGroup: String,
+    val essentialsGroup: String,
+    val lifestyleGroup: String,
+    val goalsGroup: String,
+    val salaryCategory: String,
+    val startingBalancesCategory: String,
+    val rentCategory: String,
+    val groceriesCategory: String,
+    val utilitiesCategory: String,
+    val transportCategory: String,
+    val diningOutCategory: String,
+    val entertainmentCategory: String,
+    val emergencyFundCategory: String,
+    val vacationCategory: String,
+    val employerPayee: String,
+    val landlordPayee: String,
+    val supermarketPayee: String,
+    val utilitiesPayee: String,
+    val fuelPayee: String,
+    val restaurantPayee: String,
+    val streamingPayee: String,
+    val cardPaymentPayee: String,
+    val groceriesNote: String,
+    val checkingNote: String,
+    val salarySchedule: String,
+    val rentSchedule: String,
+    val streamingSchedule: String,
+    val cardPaymentSchedule: String,
+    val overviewReport: String,
+    val welcomeReport: String,
+    val thisMonthReport: String,
+)
+
 /** Seeds a local-only budget with realistic data that exercises Actua's main workflows. */
 internal object DemoBudgetSeeder {
     const val BUDGET_ID = "demo"
-    const val BUDGET_NAME = "Actua Demo Budget"
 
-    fun seed(database: SQLiteDatabase, now: LocalDate = LocalDate.now()) {
+    fun seed(database: SQLiteDatabase, labels: DemoBudgetLabels, now: LocalDate = LocalDate.now()) {
         database.beginTransaction()
         try {
             // BlankBudgetFactory intentionally ships starter categories for newly-created budgets.
@@ -27,26 +65,26 @@ internal object DemoBudgetSeeder {
             val credit = "demo-account-credit"
             val investment = "demo-account-investment"
 
-            insertAccount(database, checking, "Everyday Checking", "checking", 0, 1.0)
-            insertAccount(database, savings, "Emergency Savings", "savings", 0, 2.0)
-            insertAccount(database, credit, "Everyday Credit Card", "credit", 0, 3.0)
-            insertAccount(database, investment, "Investment Account", "investment", 1, 4.0)
+            insertAccount(database, checking, labels.checkingAccount, "checking", 0, 1.0)
+            insertAccount(database, savings, labels.savingsAccount, "savings", 0, 2.0)
+            insertAccount(database, credit, labels.creditAccount, "credit", 0, 3.0)
+            insertAccount(database, investment, labels.investmentAccount, "investment", 1, 4.0)
 
-            val incomeGroup = group(database, "Income", true, 1.0)
-            val essentialsGroup = group(database, "Essentials", false, 2.0)
-            val lifestyleGroup = group(database, "Lifestyle", false, 3.0)
-            val goalsGroup = group(database, "Goals", false, 4.0)
+            val incomeGroup = group(database, labels.incomeGroup, true, 1.0)
+            val essentialsGroup = group(database, labels.essentialsGroup, false, 2.0)
+            val lifestyleGroup = group(database, labels.lifestyleGroup, false, 3.0)
+            val goalsGroup = group(database, labels.goalsGroup, false, 4.0)
 
-            val salary = category(database, "Salary", incomeGroup, true, 1.0)
-            val starting = category(database, "Starting Balances", incomeGroup, true, 2.0)
-            val rent = category(database, "Rent", essentialsGroup, false, 1.0)
-            val groceries = category(database, "Groceries", essentialsGroup, false, 2.0)
-            val utilities = category(database, "Utilities", essentialsGroup, false, 3.0)
-            val transport = category(database, "Transport", essentialsGroup, false, 4.0)
-            val dining = category(database, "Dining Out", lifestyleGroup, false, 1.0)
-            val entertainment = category(database, "Entertainment", lifestyleGroup, false, 2.0)
-            val emergency = category(database, "Emergency Fund", goalsGroup, false, 1.0)
-            val vacation = category(database, "Vacation", goalsGroup, false, 2.0)
+            val salary = category(database, labels.salaryCategory, incomeGroup, true, 1.0)
+            val starting = category(database, labels.startingBalancesCategory, incomeGroup, true, 2.0)
+            val rent = category(database, labels.rentCategory, essentialsGroup, false, 1.0)
+            val groceries = category(database, labels.groceriesCategory, essentialsGroup, false, 2.0)
+            val utilities = category(database, labels.utilitiesCategory, essentialsGroup, false, 3.0)
+            val transport = category(database, labels.transportCategory, essentialsGroup, false, 4.0)
+            val dining = category(database, labels.diningOutCategory, lifestyleGroup, false, 1.0)
+            val entertainment = category(database, labels.entertainmentCategory, lifestyleGroup, false, 2.0)
+            val emergency = category(database, labels.emergencyFundCategory, goalsGroup, false, 1.0)
+            val vacation = category(database, labels.vacationCategory, goalsGroup, false, 2.0)
 
             setTarget(database, groceries, BudgetTarget(BudgetTarget.Type.FIXED, 60000, startingDate = now.withDayOfMonth(1).toString()))
             setTarget(database, emergency, BudgetTarget(BudgetTarget.Type.FIXED, 25000, startingDate = now.withDayOfMonth(1).toString()))
@@ -73,14 +111,14 @@ internal object DemoBudgetSeeder {
                 ),
             )
 
-            val paycheck = payee(database, "Employer")
-            val landlord = payee(database, "Landlord")
-            val supermarket = payee(database, "Fresh Market")
-            val utilityCo = payee(database, "City Utilities")
-            val fuel = payee(database, "Fuel Station")
-            val restaurant = payee(database, "Neighborhood Cafe")
-            val streaming = payee(database, "StreamBox")
-            val cardPayment = payee(database, "Credit Card Payment")
+            val paycheck = payee(database, labels.employerPayee)
+            val landlord = payee(database, labels.landlordPayee)
+            val supermarket = payee(database, labels.supermarketPayee)
+            val utilityCo = payee(database, labels.utilitiesPayee)
+            val fuel = payee(database, labels.fuelPayee)
+            val restaurant = payee(database, labels.restaurantPayee)
+            val streaming = payee(database, labels.streamingPayee)
+            val cardPayment = payee(database, labels.cardPaymentPayee)
             val transferPayees = listOf(checking, savings, credit, investment).associateWith { transferPayee(database, it) }
 
             opening(database, checking, starting, now.minusMonths(6).withDayOfMonth(1), 450000)
@@ -126,8 +164,8 @@ internal object DemoBudgetSeeder {
                 budget(database, ym, vacation, 30000)
             }
 
-            note(database, groceries, "Monthly household groceries. Try changing the target or moving money into this category.")
-            note(database, "account-$checking", "Demo checking account. It includes cleared, uncleared, and reconciled transactions.")
+            note(database, groceries, labels.groceriesNote)
+            note(database, "account-$checking", labels.checkingNote)
 
             // Credit-card configuration uses the same preference key read by Actua.
             database.execSQL(
@@ -136,8 +174,8 @@ internal object DemoBudgetSeeder {
             )
 
             seedRules(database, groceries, supermarket, entertainment, streaming, transport, fuel)
-            seedSchedules(database, now, checking, credit, paycheck, landlord, streaming, cardPayment)
-            seedDashboard(database)
+            seedSchedules(database, labels, now, checking, credit, paycheck, landlord, streaming, cardPayment)
+            seedDashboard(database, labels)
 
             database.setTransactionSuccessful()
         } finally {
@@ -226,11 +264,11 @@ internal object DemoBudgetSeeder {
         rule(supermarket, groceries); rule(streaming, entertainment); rule(fuel, transport)
     }
 
-    private fun seedSchedules(db: SQLiteDatabase, now: LocalDate, checking: String, credit: String, paycheck: String, landlord: String, streaming: String, cardPayment: String) {
-        schedule(db, "Monthly salary", checking, paycheck, 220000, now.plusMonths(1).withDayOfMonth(2), "monthly", true)
-        schedule(db, "Rent", checking, landlord, -80000, now.plusMonths(1).withDayOfMonth(3), "monthly", false)
-        schedule(db, "Streaming subscription", credit, streaming, -1200, now.plusMonths(1).withDayOfMonth(12), "monthly", true)
-        schedule(db, "Credit card payment", checking, cardPayment, -25000, now.plusMonths(1).withDayOfMonth(25), "monthly", false)
+    private fun seedSchedules(db: SQLiteDatabase, labels: DemoBudgetLabels, now: LocalDate, checking: String, credit: String, paycheck: String, landlord: String, streaming: String, cardPayment: String) {
+        schedule(db, labels.salarySchedule, checking, paycheck, 220000, now.plusMonths(1).withDayOfMonth(2), "monthly", true)
+        schedule(db, labels.rentSchedule, checking, landlord, -80000, now.plusMonths(1).withDayOfMonth(3), "monthly", false)
+        schedule(db, labels.streamingSchedule, credit, streaming, -1200, now.plusMonths(1).withDayOfMonth(12), "monthly", true)
+        schedule(db, labels.cardPaymentSchedule, checking, cardPayment, -25000, now.plusMonths(1).withDayOfMonth(25), "monthly", false)
     }
 
     private fun schedule(db: SQLiteDatabase, name: String, account: String, payee: String, amount: Long, next: LocalDate, period: String, autoPost: Boolean) {
@@ -249,12 +287,13 @@ internal object DemoBudgetSeeder {
         db.execSQL("INSERT INTO schedules_next_date(id,schedule_id,local_next_date,local_next_date_ts,base_next_date,base_next_date_ts,tombstone) VALUES(?,?,?,?,?,?,0)", arrayOf<Any?>(nextId, scheduleId, ymd, ts, ymd, ts))
     }
 
-    private fun seedDashboard(db: SQLiteDatabase) {
+    private fun seedDashboard(db: SQLiteDatabase, labels: DemoBudgetLabels) {
         val page = "demo-dashboard-main"
-        db.execSQL("INSERT OR REPLACE INTO dashboard_pages(id,name,tombstone) VALUES(?,?,0)", arrayOf(page, "Overview"))
-        val welcome = JSONObject().put("content", "**Welcome to Actua Demo** 👋\\n\\nThis budget is stored only on this device. Try targets, rules, schedules, reconciliation, credit cards and reports.")
+        db.execSQL("INSERT OR REPLACE INTO dashboard_pages(id,name,tombstone) VALUES(?,?,0)", arrayOf(page, labels.overviewReport))
+        val welcome = JSONObject().put("content", labels.welcomeReport)
         db.execSQL("INSERT INTO dashboard(id,type,width,height,x,y,meta,tombstone,dashboard_page_id) VALUES(?,?,?,?,?,?,?,0,?)", arrayOf<Any?>(id(), "markdown-card", 12, 2, 0, 0, welcome.toString(), page))
-        db.execSQL("INSERT INTO dashboard(id,type,width,height,x,y,meta,tombstone,dashboard_page_id) VALUES(?,?,?,?,?,?,?,0,?)", arrayOf<Any?>(id(), "spending-card", 12, 2, 0, 2, "{\"name\":\"This Month\",\"mode\":\"single-month\"}", page))
+        val spending = JSONObject().put("name", labels.thisMonthReport).put("mode", "single-month")
+        db.execSQL("INSERT INTO dashboard(id,type,width,height,x,y,meta,tombstone,dashboard_page_id) VALUES(?,?,?,?,?,?,?,0,?)", arrayOf<Any?>(id(), "spending-card", 12, 2, 0, 2, spending.toString(), page))
         db.execSQL("INSERT INTO dashboard(id,type,width,height,x,y,meta,tombstone,dashboard_page_id) VALUES(?,?,?,?,?,?,?,0,?)", arrayOf<Any?>(id(), "net-worth-card", 12, 2, 0, 4, "{}", page))
     }
 

@@ -32,9 +32,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.ActuaRepository
 import com.azimulkabir.actua.data.budget.model.ActualTag
 import com.azimulkabir.actua.data.sync.SyncSignals
@@ -52,28 +55,28 @@ internal fun ManagedTagTransactionsScreen(tag: ActualTag, onBack: () -> Unit, mo
     BackHandler(onBack = onBack)
 
     Column(modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("Tag transactions") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } })
+        TopAppBar(title = { Text(stringResource(R.string.tag_transactions_title)) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.back)) } })
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             AssistChip(
                 onClick = onBack,
                 label = { Text("#${tag.tag}") },
                 leadingIcon = { androidx.compose.foundation.layout.Box(Modifier.size(12.dp).background(parseManagedTagColor(tag.color), CircleShape)) },
-                trailingIcon = { Icon(Icons.Outlined.Close, "Clear tag filter", modifier = Modifier.size(AssistChipDefaults.IconSize)) },
+                trailingIcon = { Icon(Icons.Outlined.Close, stringResource(R.string.clear_tag_filter), modifier = Modifier.size(AssistChipDefaults.IconSize)) },
             )
             Spacer(Modifier.weight(1f))
-            Text("${transactions.size} transactions", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(pluralStringResource(R.plurals.transaction_count, transactions.size, transactions.size), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (transactions.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("No transactions use #${tag.tag}", style = MaterialTheme.typography.titleMedium)
-                Text("Exact hashtag matching is used. Escaped ##${tag.tag} text is ignored.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.no_transactions_use_tag, tag.tag), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.exact_hashtag_matching, tag.tag), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
         } else LazyColumn(Modifier.fillMaxSize()) {
             items(transactions, key = { it.id }) { transaction ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(transaction.payee.ifBlank { "No payee" }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(transaction.payee.ifBlank { stringResource(R.string.no_payee) }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(listOf(transaction.category, transaction.account).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Text(formatMoneyCents(transaction.amountCents, false), fontWeight = FontWeight.SemiBold)

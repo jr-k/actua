@@ -27,7 +27,7 @@ data class ScheduleListItem(
     val title: String get() = schedule.name?.takeIf(String::isNotBlank)
         ?: payeeName?.takeIf(String::isNotBlank)
         ?: accountName?.takeIf(String::isNotBlank)
-        ?: "Schedule"
+        ?: ""
 }
 
 data class ScheduleLinkedTransaction(

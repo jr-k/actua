@@ -3,6 +3,7 @@ package com.azimulkabir.actua.ui.settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.snap
@@ -42,8 +43,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.azimulkabir.actua.BuildConfig
+import com.azimulkabir.actua.R
 import com.azimulkabir.actua.data.budget.ActiveTagRepository
 import com.azimulkabir.actua.data.location.ForegroundLocationPermission
 import com.azimulkabir.actua.data.preferences.LocationPreferences
@@ -51,14 +54,14 @@ import com.azimulkabir.actua.ui.components.ActuaListRow
 import com.azimulkabir.actua.ui.components.ActuaScreenHeader
 import com.azimulkabir.actua.ui.components.ActuaSectionHeader
 
-internal enum class SettingsPage(val title: String, val depth: Int) {
-    Manage("Manage", 0),
-    Tags("Tags", 1),
-    General("Settings", 1),
-    Transactions("Transactions & Accounts", 2),
-    Display("Display", 2),
-    Privacy("Privacy", 2),
-    About("About", 2),
+internal enum class SettingsPage(@StringRes val titleRes: Int, val depth: Int) {
+    Manage(R.string.settings_page_manage, 0),
+    Tags(R.string.settings_page_tags, 1),
+    General(R.string.settings_page_settings, 1),
+    Transactions(R.string.settings_page_transactions_accounts, 2),
+    Display(R.string.settings_page_display, 2),
+    Privacy(R.string.settings_page_privacy, 2),
+    About(R.string.settings_page_about, 2),
 }
 
 internal fun isForwardSettingsNavigation(from: SettingsPage, to: SettingsPage): Boolean =
@@ -76,6 +79,8 @@ fun SettingsScreen(
     onCurrencyCodeChange: (String) -> Unit = {},
     currencySymbolOnly: Boolean = false,
     onCurrencySymbolOnlyChange: (Boolean) -> Unit = {},
+    languageTag: String = "",
+    onLanguageChange: (String) -> Unit = {},
     dateFormat: String = "System default",
     onDateFormatChange: (String) -> Unit = {},
     numberFormat: String = "System default",
@@ -218,164 +223,374 @@ fun SettingsScreen(
             )
         } else Column(modifier = Modifier.fillMaxSize().verticalScroll(scrollState)) {
             ActuaScreenHeader(
-                title = shownPage.title,
+                title = stringResource(shownPage.titleRes),
                 onBack = if (shownPage != SettingsPage.Manage) ::navigateBack else null,
             ) {
                 if (shownPage == SettingsPage.Manage) {
                     IconButton(onClick = { page = SettingsPage.General }) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                        Icon(
+                            Icons.Outlined.Settings,
+                            contentDescription = stringResource(R.string.settings_open_settings),
+                        )
                     }
                 }
             }
             when (shownPage) {
                 SettingsPage.Manage -> {
-                    SettingsSection("Insights")
-                    SettingsRow("Reports", "View dashboards and financial reports", true) {
+                    SettingsSection(stringResource(R.string.settings_section_insights))
+                    SettingsRow(
+                        stringResource(R.string.settings_reports),
+                        stringResource(R.string.settings_reports_description),
+                        true,
+                    ) {
                         openFullScreen(onReportsClick)
                     }
-                    SettingsSection("Automation")
-                    SettingsRow("Bills & Calendar", "Upcoming schedules and credit-card due dates", true) {
+                    SettingsSection(stringResource(R.string.settings_section_automation))
+                    SettingsRow(
+                        stringResource(R.string.settings_bills_calendar),
+                        stringResource(R.string.settings_bills_calendar_description),
+                        true,
+                    ) {
                         openFullScreen(onBillsCalendarClick)
                     }
-                    SettingsRow("Scheduled Transactions", "Review recurring bills, income and upcoming dates", true) {
+                    SettingsRow(
+                        stringResource(R.string.settings_scheduled_transactions),
+                        stringResource(R.string.settings_scheduled_transactions_description),
+                        true,
+                    ) {
                         openFullScreen(onSchedulesClick)
                     }
-                    SettingsRow("Rules", "Automatically categorize and transform transactions", true) {
+                    SettingsRow(
+                        stringResource(R.string.settings_rules),
+                        stringResource(R.string.settings_rules_description),
+                        true,
+                    ) {
                         openFullScreen(onRulesClick)
                     }
-                    SettingsSection("Transactions & data")
-                    SettingsRow("Tags", "Create, edit, color, hide and delete managed tags", true) {
+                    SettingsSection(stringResource(R.string.settings_section_transactions_data))
+                    SettingsRow(
+                        stringResource(R.string.settings_tags),
+                        stringResource(R.string.settings_tags_description),
+                        true,
+                    ) {
                         page = SettingsPage.Tags
                     }
-                    SettingsRow("Import Transactions", "Review a CSV bank statement before importing", true) {
+                    SettingsRow(
+                        stringResource(R.string.settings_import_transactions),
+                        stringResource(R.string.settings_import_transactions_description),
+                        true,
+                    ) {
                         openFullScreen(onImportTransactionsClick)
                     }
-                    SettingsRow("Connection & Data", "Actual server, budgets, sync, backups and restore", true) {
+                    SettingsRow(
+                        stringResource(R.string.settings_connection_data),
+                        stringResource(R.string.settings_connection_data_description),
+                        true,
+                    ) {
                         openFullScreen(onConnectionClick)
                     }
-                    SettingsSection("Financial setup")
-                    SettingsRow("Credit Cards & Billing Cycles", "Cycle spend, due dates and credit limits", true) {
+                    SettingsSection(stringResource(R.string.settings_section_financial_setup))
+                    SettingsRow(
+                        stringResource(R.string.settings_credit_cards),
+                        stringResource(R.string.settings_credit_cards_description),
+                        true,
+                    ) {
                         openFullScreen(onCreditCardsClick)
                     }
                 }
                 SettingsPage.General -> {
-                    SettingsSection("Preferences")
-                    SettingsRow("Home", "Show, hide and reorder the sections on Home", true) {
+                    SettingsSection(stringResource(R.string.settings_section_preferences))
+                    SettingsRow(
+                        stringResource(R.string.settings_home),
+                        stringResource(R.string.settings_home_description),
+                        true,
+                    ) {
                         openFullScreen(onCustomizeHomeClick)
                     }
-                    SettingsRow("Transactions & Accounts", "Entry defaults, transaction lists and account summaries", true) {
+                    SettingsRow(
+                        stringResource(R.string.settings_page_transactions_accounts),
+                        stringResource(R.string.settings_transactions_accounts_description),
+                        true,
+                    ) {
                         page = SettingsPage.Transactions
                     }
-                    SettingsRow("Display", "Currency, date, numbers, appearance and start page", true) {
+                    SettingsRow(
+                        stringResource(R.string.settings_page_display),
+                        stringResource(R.string.settings_display_description),
+                        true,
+                    ) {
                         page = SettingsPage.Display
                     }
-                    SettingsRow("Privacy", "Balances and optional location-aware payee controls", true) {
+                    SettingsRow(
+                        stringResource(R.string.settings_page_privacy),
+                        stringResource(R.string.settings_privacy_description),
+                        true,
+                    ) {
                         page = SettingsPage.Privacy
                     }
-                    SettingsSection("About")
-                    SettingsRow("About Actua", "Version, project information, credits and license", true) {
+                    SettingsSection(stringResource(R.string.settings_section_about))
+                    SettingsRow(
+                        stringResource(R.string.settings_about_actua),
+                        stringResource(R.string.settings_about_actua_description),
+                        true,
+                    ) {
                         page = SettingsPage.About
                     }
                 }
                 SettingsPage.Transactions -> {
-                    SettingsChoice("Default account", defaultAccount ?: "None", listOf("None") + accountOptions) {
-                        onDefaultAccountChange(it.takeUnless { value -> value == "None" })
+                    SettingsChoice(
+                        stringResource(R.string.settings_default_account),
+                        defaultAccount ?: DEFAULT_ACCOUNT_NONE,
+                        listOf(
+                            SettingsChoiceOption(
+                                DEFAULT_ACCOUNT_NONE,
+                                stringResource(R.string.settings_none),
+                            ),
+                        ) + accountOptions.map { SettingsChoiceOption(it, it) },
+                    ) {
+                        onDefaultAccountChange(it.takeUnless { value -> value == DEFAULT_ACCOUNT_NONE })
                     }
-                    SettingsToggle("Group transactions by date", "Use dated sections in transaction lists", groupTransactionsByDate, onGroupTransactionsByDateChange)
-                    SettingsToggle("Conventional amount entry", "Type 324 as 324.00 instead of filling cents first",
-                        conventionalAmountEntry, onConventionalAmountEntryChange)
-                    SettingsToggle("Account monthly summary", "Show Income, Expenses and Net at the top of Accounts",
-                        showAccountsMonthlySummary, onShowAccountsMonthlySummaryChange)
                     SettingsToggle(
-                        "Current balance summary",
-                        "Show current, cleared, uncleared and reconciled balances inside accounts",
+                        stringResource(R.string.settings_group_transactions),
+                        stringResource(R.string.settings_group_transactions_description),
+                        groupTransactionsByDate,
+                        onGroupTransactionsByDateChange,
+                    )
+                    SettingsToggle(
+                        stringResource(R.string.settings_conventional_amount_entry),
+                        stringResource(R.string.settings_conventional_amount_entry_description),
+                        conventionalAmountEntry,
+                        onConventionalAmountEntryChange,
+                    )
+                    SettingsToggle(
+                        stringResource(R.string.settings_account_monthly_summary),
+                        stringResource(R.string.settings_account_monthly_summary_description),
+                        showAccountsMonthlySummary,
+                        onShowAccountsMonthlySummaryChange,
+                    )
+                    SettingsToggle(
+                        stringResource(R.string.settings_current_balance_summary),
+                        stringResource(R.string.settings_current_balance_summary_description),
                         showCurrentBalanceSummary,
                         onShowCurrentBalanceSummaryChange,
                     )
-                    SettingsRow("Credit Cards & Billing Cycles", "Cycle spend, due dates and credit limits", true) {
+                    SettingsRow(
+                        stringResource(R.string.settings_credit_cards),
+                        stringResource(R.string.settings_credit_cards_description),
+                        true,
+                    ) {
                         openFullScreen(onCreditCardsClick)
                     }
                 }
                 SettingsPage.Display -> {
-                    SettingsChoice("Currency", currencyLabel(currencyCode), currencyOptions.map { it.first }) { selected ->
-                        onCurrencyCodeChange(currencyOptions.first { it.first == selected }.second)
-                    }
-                    if (currencyCode.isNotBlank()) SettingsToggle("Symbol only",
-                        "Show ${'$'} instead of US${'$'}, CA${'$'} or A${'$'} where applicable",
-                        currencySymbolOnly, onCurrencySymbolOnlyChange)
                     SettingsChoice(
-                        "Date format",
+                        stringResource(R.string.settings_language),
+                        languageTag,
+                        listOf(
+                            SettingsChoiceOption("", stringResource(R.string.settings_language_system)),
+                            SettingsChoiceOption("en", stringResource(R.string.settings_language_english)),
+                            SettingsChoiceOption("fr", stringResource(R.string.settings_language_french)),
+                        ),
+                        onLanguageChange,
+                    )
+                    SettingsChoice(
+                        stringResource(R.string.settings_currency),
+                        currencyCode,
+                        currencyOptions.map {
+                            SettingsChoiceOption(
+                                it.code,
+                                stringResource(it.labelRes),
+                            )
+                        },
+                        onCurrencyCodeChange,
+                    )
+                    if (currencyCode.isNotBlank()) {
+                        SettingsToggle(
+                            stringResource(R.string.settings_symbol_only),
+                            stringResource(R.string.settings_symbol_only_description),
+                            currencySymbolOnly,
+                            onCurrencySymbolOnlyChange,
+                        )
+                    }
+                    SettingsChoice(
+                        stringResource(R.string.settings_date_format),
                         dateFormat,
-                        listOf("System default", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"),
+                        listOf(
+                            SettingsChoiceOption(
+                                "System default",
+                                stringResource(R.string.settings_system_default),
+                            ),
+                            SettingsChoiceOption(
+                                "DD/MM/YYYY",
+                                stringResource(R.string.settings_date_dd_mm_yyyy),
+                            ),
+                            SettingsChoiceOption(
+                                "MM/DD/YYYY",
+                                stringResource(R.string.settings_date_mm_dd_yyyy),
+                            ),
+                            SettingsChoiceOption(
+                                "YYYY-MM-DD",
+                                stringResource(R.string.settings_date_yyyy_mm_dd),
+                            ),
+                        ),
                         onDateFormatChange,
                     )
                     Text(
-                        "Preview: ${datePreview(dateFormat)}",
+                        stringResource(R.string.settings_preview, datePreview(dateFormat)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                     SettingsChoice(
-                        "Number format",
+                        stringResource(R.string.settings_number_format),
                         numberFormat,
-                        listOf("System default", "1,234.56", "1.234,56", "1 234,56", "1234.56", "1,23,456.78"),
+                        listOf(
+                            SettingsChoiceOption(
+                                "System default",
+                                stringResource(R.string.settings_system_default),
+                            ),
+                            SettingsChoiceOption(
+                                "1,234.56",
+                                stringResource(R.string.settings_number_comma_decimal),
+                            ),
+                            SettingsChoiceOption(
+                                "1.234,56",
+                                stringResource(R.string.settings_number_period_decimal_comma),
+                            ),
+                            SettingsChoiceOption(
+                                "1 234,56",
+                                stringResource(R.string.settings_number_space_decimal_comma),
+                            ),
+                            SettingsChoiceOption(
+                                "1234.56",
+                                stringResource(R.string.settings_number_plain_decimal),
+                            ),
+                            SettingsChoiceOption(
+                                "1,23,456.78",
+                                stringResource(R.string.settings_number_indian_grouping),
+                            ),
+                        ),
                         onNumberFormatChange,
                     )
                     Text(
-                        "Preview: ${numberPreview(numberFormat)}",
+                        stringResource(R.string.settings_preview, numberPreview(numberFormat)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
-                    SettingsChoice("Appearance", appearance, listOf("System", "Light", "Dark"), onAppearanceChange)
+                    SettingsChoice(
+                        stringResource(R.string.settings_appearance),
+                        appearance,
+                        listOf(
+                            SettingsChoiceOption(
+                                "System",
+                                stringResource(R.string.settings_appearance_system),
+                            ),
+                            SettingsChoiceOption(
+                                "Light",
+                                stringResource(R.string.settings_appearance_light),
+                            ),
+                            SettingsChoiceOption(
+                                "Dark",
+                                stringResource(R.string.settings_appearance_dark),
+                            ),
+                        ),
+                        onAppearanceChange,
+                    )
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                         SettingsToggle(
-                            "Material You colors",
-                            "Match colors to your wallpaper instead of Actua's default theme",
+                            stringResource(R.string.settings_material_you_colors),
+                            stringResource(R.string.settings_material_you_colors_description),
                             useDynamicColor,
                             onUseDynamicColorChange,
                         )
                     }
                     SettingsChoice(
-                        "Start page",
+                        stringResource(R.string.settings_start_page),
                         startPage,
-                        listOf("Home", "Budget", "Transactions", "Accounts", "Manage"),
+                        listOf(
+                            SettingsChoiceOption(
+                                "Home",
+                                stringResource(R.string.settings_start_page_home),
+                            ),
+                            SettingsChoiceOption(
+                                "Budget",
+                                stringResource(R.string.settings_start_page_budget),
+                            ),
+                            SettingsChoiceOption(
+                                "Transactions",
+                                stringResource(R.string.settings_start_page_transactions),
+                            ),
+                            SettingsChoiceOption(
+                                "Accounts",
+                                stringResource(R.string.settings_start_page_accounts),
+                            ),
+                            SettingsChoiceOption(
+                                "Manage",
+                                stringResource(R.string.settings_start_page_manage),
+                            ),
+                        ),
                         onStartPageChange,
                     )
                     SettingsChoice(
-                        "Bottom navigation labels",
+                        stringResource(R.string.settings_bottom_navigation_labels),
                         if (showBottomNavigationLabels) "Icons and names" else "Icons only",
-                        listOf("Icons and names", "Icons only"),
+                        listOf(
+                            SettingsChoiceOption(
+                                "Icons and names",
+                                stringResource(R.string.settings_navigation_icons_names),
+                            ),
+                            SettingsChoiceOption(
+                                "Icons only",
+                                stringResource(R.string.settings_navigation_icons_only),
+                            ),
+                        ),
                     ) { onShowBottomNavigationLabelsChange(it == "Icons and names") }
-                    SettingsToggle("Hide decimal places", "Round displayed amounts without changing their values",
-                        hideDecimalPlaces, onHideDecimalPlacesChange)
-                    SettingsToggle("Notes", "Show the Notes field on accounts and budget categories",
-                        showNotes, onShowNotesChange)
+                    SettingsToggle(
+                        stringResource(R.string.settings_hide_decimal_places),
+                        stringResource(R.string.settings_hide_decimal_places_description),
+                        hideDecimalPlaces,
+                        onHideDecimalPlacesChange,
+                    )
+                    SettingsToggle(
+                        stringResource(R.string.settings_notes),
+                        stringResource(R.string.settings_notes_description),
+                        showNotes,
+                        onShowNotesChange,
+                    )
                 }
                 SettingsPage.Privacy -> {
-                    SettingsToggle("Hide balances", "Mask budget, account and transaction amounts",
-                        hideBalances, onHideBalancesChange)
-                    SettingsSection("Location-aware payees")
                     SettingsToggle(
-                        "Record payee locations",
+                        stringResource(R.string.settings_hide_balances),
+                        stringResource(R.string.settings_hide_balances_description),
+                        hideBalances,
+                        onHideBalancesChange,
+                    )
+                    SettingsSection(stringResource(R.string.settings_section_location_payees))
+                    SettingsToggle(
+                        stringResource(R.string.settings_record_payee_locations),
                         if (recordPayeeLocations && locationPermissionGranted) {
-                            "Use your location only while Actua is open to remember eligible payees nearby. Coordinates stay in your Actual budget and sync with it."
+                            stringResource(
+                                R.string.settings_record_payee_locations_enabled_description,
+                            )
                         } else {
-                            "Optional and off by default. Enabling asks for foreground location permission. No background tracking or third-party location service is used."
+                            stringResource(
+                                R.string.settings_record_payee_locations_disabled_description,
+                            )
                         },
                         recordPayeeLocations,
                         ::setRecordPayeeLocations,
                     )
                     SettingsRow(
-                        "Payee Locations",
-                        "Inspect or delete coordinates saved in this budget",
+                        stringResource(R.string.settings_payee_locations),
+                        stringResource(R.string.settings_payee_locations_description),
                         true,
                     ) { openFullScreen(onPayeeLocationsClick) }
                     Text(
                         if (locationPermissionGranted) {
-                            "Location permission: allowed while using the app"
+                            stringResource(R.string.settings_location_permission_allowed)
                         } else {
-                            "Location permission: not granted"
+                            stringResource(R.string.settings_location_permission_denied)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -384,49 +599,66 @@ fun SettingsScreen(
                 }
                 SettingsPage.About -> {
                     ListItem(
-                        headlineContent = { Text("Actua") },
+                        headlineContent = { Text(stringResource(R.string.app_name)) },
                         supportingContent = {
-                            Text("Native Android client for Actual Budget\nVersion ${BuildConfig.VERSION_NAME}")
+                            Text(
+                                stringResource(
+                                    R.string.settings_about_summary,
+                                    BuildConfig.VERSION_NAME,
+                                ),
+                            )
                         },
                     )
-                    SettingsSection("Project")
+                    SettingsSection(stringResource(R.string.settings_section_project))
                     ListItem(
-                        headlineContent = { Text("Actua on GitHub") },
-                        supportingContent = { Text("github.com/azimul-kabir/actua") },
+                        headlineContent = { Text(stringResource(R.string.settings_actua_github)) },
+                        supportingContent = {
+                            Text(stringResource(R.string.settings_actua_github_url))
+                        },
                         trailingContent = { Icon(Icons.Outlined.ChevronRight, contentDescription = null) },
                         modifier = Modifier.clickable {
                             uriHandler.openUri("https://github.com/azimul-kabir/actua")
                         },
                     )
                     ListItem(
-                        headlineContent = { Text("Independent community project") },
+                        headlineContent = {
+                            Text(stringResource(R.string.settings_independent_project))
+                        },
                         supportingContent = {
-                            Text("Actua connects directly to your self-hosted Actual server and keeps budget data locally available offline. It is not affiliated with or endorsed by the Actual Budget team.")
+                            Text(
+                                stringResource(
+                                    R.string.settings_independent_project_description,
+                                ),
+                            )
                         },
                     )
-                    SettingsSection("Credits")
+                    SettingsSection(stringResource(R.string.settings_section_credits))
                     ListItem(
-                        headlineContent = { Text("Actuali for iOS") },
+                        headlineContent = { Text(stringResource(R.string.settings_actuali_ios)) },
                         supportingContent = {
-                            Text("Actua was originally based on and continues to reference Matt Farrell’s open-source Actuali project for tested behavior and design guidance.")
+                            Text(stringResource(R.string.settings_actuali_ios_description))
                         },
                     )
                     ListItem(
-                        headlineContent = { Text("Actual Budget") },
+                        headlineContent = { Text(stringResource(R.string.settings_actual_budget)) },
                         supportingContent = {
-                            Text("Synchronization behavior is compatible with the open-source Actual Budget project.")
+                            Text(stringResource(R.string.settings_actual_budget_description))
                         },
                     )
-                    SettingsSection("Compatibility")
+                    SettingsSection(stringResource(R.string.settings_section_compatibility))
                     ListItem(
-                        headlineContent = { Text("Android 9 or later") },
-                        supportingContent = { Text("Requires a reachable self-hosted Actual Budget server.") },
-                    )
-                    SettingsSection("License")
-                    ListItem(
-                        headlineContent = { Text("MIT License") },
+                        headlineContent = {
+                            Text(stringResource(R.string.settings_android_requirement))
+                        },
                         supportingContent = {
-                            Text("Open-source notices and complete attribution are available in the repository’s LICENSE and NOTICE files.")
+                            Text(stringResource(R.string.settings_server_requirement))
+                        },
+                    )
+                    SettingsSection(stringResource(R.string.settings_section_license))
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.settings_mit_license)) },
+                        supportingContent = {
+                            Text(stringResource(R.string.settings_license_description))
                         },
                     )
                 }
@@ -453,38 +685,53 @@ private fun numberPreview(format: String): String = when (format) {
     else -> java.text.NumberFormat.getNumberInstance().format(1234.56)
 }
 
-private val currencyOptions = listOf(
-    "None" to "",
-    "৳ BDT" to "BDT",
-    "${'$'} USD" to "USD",
-    "€ EUR" to "EUR",
-    "£ GBP" to "GBP",
-    "C${'$'} CAD" to "CAD",
-    "A${'$'} AUD" to "AUD",
-    "¥ JPY" to "JPY",
-    "₹ INR" to "INR",
-    "¥ CNY" to "CNY",
-    "S${'$'} SGD" to "SGD",
-    "د.إ AED" to "AED",
-    "ر.س SAR" to "SAR",
+private data class CurrencyOption(
+    @StringRes val labelRes: Int,
+    val code: String,
 )
 
-private fun currencyLabel(code: String): String =
-    currencyOptions.firstOrNull { it.second == code }?.first ?: code.ifBlank { "None" }
+private val currencyOptions = listOf(
+    CurrencyOption(R.string.settings_none, ""),
+    CurrencyOption(R.string.settings_currency_bdt, "BDT"),
+    CurrencyOption(R.string.settings_currency_usd, "USD"),
+    CurrencyOption(R.string.settings_currency_eur, "EUR"),
+    CurrencyOption(R.string.settings_currency_gbp, "GBP"),
+    CurrencyOption(R.string.settings_currency_cad, "CAD"),
+    CurrencyOption(R.string.settings_currency_aud, "AUD"),
+    CurrencyOption(R.string.settings_currency_jpy, "JPY"),
+    CurrencyOption(R.string.settings_currency_inr, "INR"),
+    CurrencyOption(R.string.settings_currency_cny, "CNY"),
+    CurrencyOption(R.string.settings_currency_sgd, "SGD"),
+    CurrencyOption(R.string.settings_currency_aed, "AED"),
+    CurrencyOption(R.string.settings_currency_sar, "SAR"),
+)
+
+private const val DEFAULT_ACCOUNT_NONE = "\u0000"
+
+private data class SettingsChoiceOption(
+    val value: String,
+    val label: String,
+)
 
 @Composable
-private fun SettingsChoice(label: String, value: String, options: List<String>, onChange: (String) -> Unit) {
+private fun SettingsChoice(
+    label: String,
+    value: String,
+    options: List<SettingsChoiceOption>,
+    onChange: (String) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = options.firstOrNull { it.value == value }?.label ?: value
     ListItem(
         headlineContent = { Text(label) },
         trailingContent = {
             Box {
-                TextButton(onClick = { expanded = true }) { Text(value) }
+                TextButton(onClick = { expanded = true }) { Text(selectedLabel) }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    options.distinct().forEach { option ->
-                        DropdownMenuItem(text = { Text(option) }, onClick = {
+                    options.distinctBy { it.value }.forEach { option ->
+                        DropdownMenuItem(text = { Text(option.label) }, onClick = {
                             expanded = false
-                            onChange(option)
+                            onChange(option.value)
                         })
                     }
                 }
@@ -519,7 +766,9 @@ private fun SettingsRow(label: String, detail: String, enabled: Boolean = false,
         title = { Text(label, style = MaterialTheme.typography.bodyLarge) },
         subtitle = {
             Text(
-                if (enabled) detail else "$detail · Coming with backend port",
+                if (enabled) detail else {
+                    stringResource(R.string.settings_coming_with_backend, detail)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

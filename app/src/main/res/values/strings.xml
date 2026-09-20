@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Actua</string>
+    <string name="app_name" translatable="false">Actua</string>
     <string name="widget_budget_snapshot">Budget snapshot</string>
     <string name="widget_favourite_categories">Favourite categories</string>
     <string name="widget_quick_transaction">Quick transaction</string>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="demo_budget_name">Budget de démonstration Actua</string>
+
+    <string name="demo_account_checking">Compte courant</string>
+    <string name="demo_account_savings">Épargne de précaution</string>
+    <string name="demo_account_credit">Carte de crédit courante</string>
+    <string name="demo_account_investment">Compte d’investissement</string>
+
+    <string name="demo_group_income">Revenus</string>
+    <string name="demo_group_essentials">Dépenses essentielles</string>
+    <string name="demo_group_lifestyle">Loisirs et sorties</string>
+    <string name="demo_group_goals">Projets</string>
+
+    <string name="demo_category_salary">Salaire</string>
+    <string name="demo_category_starting_balances">Soldes initiaux</string>
+    <string name="demo_category_rent">Loyer</string>
+    <string name="demo_category_groceries">Courses alimentaires</string>
+    <string name="demo_category_utilities">Factures</string>
+    <string name="demo_category_transport">Transports</string>
+    <string name="demo_category_dining_out">Restaurants</string>
+    <string name="demo_category_entertainment">Divertissements</string>
+    <string name="demo_category_emergency_fund">Fonds d’urgence</string>
+    <string name="demo_category_vacation">Vacances</string>
+
+    <string name="demo_payee_employer">Employeur</string>
+    <string name="demo_payee_landlord">Propriétaire</string>
+    <string name="demo_payee_supermarket">Marché du quartier</string>
+    <string name="demo_payee_utilities">Services municipaux</string>
+    <string name="demo_payee_fuel">Station-service</string>
+    <string name="demo_payee_restaurant">Café du quartier</string>
+    <string name="demo_payee_streaming">StreamBox</string>
+    <string name="demo_payee_card_payment">Paiement de la carte de crédit</string>
+
+    <string name="demo_note_groceries">Courses alimentaires mensuelles du foyer. Essayez de modifier l’objectif ou de transférer de l’argent vers cette catégorie.</string>
+    <string name="demo_note_checking">Compte courant de démonstration. Il contient des opérations pointées, non pointées et rapprochées.</string>
+
+    <string name="demo_schedule_salary">Salaire mensuel</string>
+    <string name="demo_schedule_rent">Loyer</string>
+    <string name="demo_schedule_streaming">Abonnement au streaming</string>
+    <string name="demo_schedule_card_payment">Paiement de la carte de crédit</string>
+
+    <string name="demo_report_overview">Vue d’ensemble</string>
+    <string name="demo_report_welcome">**Bienvenue dans la démo Actua** 👋\n\nCe budget est stocké uniquement sur cet appareil. Essayez les objectifs, les règles, les échéanciers, le rapprochement, les cartes de crédit et les rapports.</string>
+    <string name="demo_report_this_month">Ce mois-ci</string>
+</resources>

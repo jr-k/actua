@@ -27,7 +27,7 @@ in the main branch ruleset if they should be required for merging.
 
 Release metadata changes on `main` run the Android Release workflow. It
 builds and validates the persistently signed release APK, creates the version tag and
-GitHub prerelease, copies that version's `CHANGELOG.md` section into the release
+GitHub release, copies that version's `CHANGELOG.md` section into the release
 description, and attaches the versioned APK. Update `versionCode`,
 `versionName`, and `CHANGELOG.md` together for each release.
 
@@ -44,7 +44,8 @@ Every release follows this sequence:
 
 1. Open a release-prep issue first (per AGENTS.md's issue-before-branch rule), scoped to
    everything merged since the previous release.
-2. Bump `versionCode` (+1) and `versionName` together in `app/build.gradle.kts`.
+2. Increase `versionCode` and set the calendar `versionName` (`YYYY.M.D`) in
+   `app/build.gradle.kts`.
 3. Add a `## [<version>]` section to `CHANGELOG.md` in the existing
    Added/Changed/Fixed/Safety format.
 4. Add a dedicated `docs/releases/<version>.md` file: a one-line summary, the

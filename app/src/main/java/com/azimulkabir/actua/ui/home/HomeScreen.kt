@@ -25,8 +25,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.azimulkabir.actua.data.home.HomeSection
@@ -41,6 +43,10 @@ import com.azimulkabir.actua.ui.components.ActuaScreenHeader
 import com.azimulkabir.actua.ui.components.ActuaSectionHeader
 import com.azimulkabir.actua.ui.components.formatMoneyCents
 import com.azimulkabir.actua.ui.theme.Spacing
+import com.azimulkabir.actua.R
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Stable Home root. Dashboard slices fill these keyed sections independently, preserving this
@@ -66,23 +72,23 @@ fun HomeScreen(
     }
     LazyColumn(modifier = modifier.fillMaxSize(), state = listState) {
         item(key = "home-header") {
-            ActuaScreenHeader(title = "Home") {
+            ActuaScreenHeader(title = stringResource(R.string.home_title)) {
                 IconButton(onClick = onCustomizeClick) {
-                    Icon(Icons.Outlined.Tune, contentDescription = "Customize Home")
+                    Icon(Icons.Outlined.Tune, contentDescription = stringResource(R.string.home_customize))
                 }
             }
         }
         sections.forEach { section ->
             item(key = section.name) {
                 Column {
-                    HomeSectionHeader(section.title)
+                    HomeSectionHeader(stringResource(section.titleRes))
                     when (section) {
                         HomeSection.READY_TO_BUDGET -> ReadyToBudgetCard(projection.budgetOverview, hideDecimalPlaces, onBudgetClick)
                         HomeSection.FAVORITE_CATEGORIES -> CategoryRows(projection.favoriteCategories, hideDecimalPlaces, onBudgetClick)
                         HomeSection.FAVORITE_ACCOUNTS -> AccountRows(projection.favoriteAccounts, hideDecimalPlaces, onAccountsClick)
                         HomeSection.UPCOMING -> ScheduleRows(projection.upcomingSchedules, hideDecimalPlaces, onSchedulesClick)
                         HomeSection.THIS_MONTH -> ThisMonthCard(projection.monthTransactions, hideDecimalPlaces, onTransactionsClick)
-                        HomeSection.REPORTS -> HomeDestinationRow("Dashboards and financial insights", Icons.Outlined.BarChart, onReportsClick)
+                        HomeSection.REPORTS -> HomeDestinationRow(stringResource(R.string.home_dashboards), Icons.Outlined.BarChart, onReportsClick)
                         HomeSection.RECENT_ACTIVITY -> TransactionRows(projection.recentTransactions, hideDecimalPlaces, onTransactionsClick)
                     }
                 }
@@ -97,21 +103,21 @@ private fun HomeSectionHeader(title: String) = ActuaSectionHeader(title = title)
 @Composable private fun ReadyToBudgetCard(overview: BudgetOverview, hideDecimals: Boolean, onClick: () -> Unit) {
     Card(Modifier.fillMaxWidth().padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.sm).clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Row(Modifier.fillMaxWidth().padding(Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text("Ready to Budget", style = MaterialTheme.typography.labelLarge); Text(formatMoneyCents(overview.toBudgetCents ?: 0L, hideDecimals), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); if (overview.toBudgetCents == null) Text("No budget month selected", style = MaterialTheme.typography.bodySmall) }
+            Column(Modifier.weight(1f)) { Text(stringResource(R.string.home_ready_to_budget), style = MaterialTheme.typography.labelLarge); Text(formatMoneyCents(overview.toBudgetCents ?: 0L, hideDecimals), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); if (overview.toBudgetCents == null) Text(stringResource(R.string.home_no_budget_month), style = MaterialTheme.typography.bodySmall) }
             Icon(Icons.Outlined.PieChartOutline, contentDescription = null)
         }
     }
 }
 
 @Composable private fun CategoryRows(categories: List<BudgetCategory>, hideDecimals: Boolean, onClick: () -> Unit) {
-    if (categories.isEmpty()) HomeEmptyRow("No favorite categories yet", onClick) else categories.take(5).forEach { HomeValueRow(it.name, "Available", it.balanceCents, hideDecimals, onClick) }
+    if (categories.isEmpty()) HomeEmptyRow(stringResource(R.string.home_no_favorite_categories), onClick) else categories.take(5).forEach { HomeValueRow(it.name, stringResource(R.string.home_available), it.balanceCents, hideDecimals, onClick) }
 }
 @Composable private fun AccountRows(accounts: List<Account>, hideDecimals: Boolean, onClick: () -> Unit) {
-    if (accounts.isEmpty()) HomeEmptyRow("No favorite accounts yet", onClick) else accounts.take(5).forEach { HomeValueRow(it.name, it.type.replaceFirstChar { c -> c.uppercase() }, it.balanceCents, hideDecimals, onClick) }
+    if (accounts.isEmpty()) HomeEmptyRow(stringResource(R.string.home_no_favorite_accounts), onClick) else accounts.take(5).forEach { HomeValueRow(it.name, accountTypeLabel(it.type), it.balanceCents, hideDecimals, onClick) }
 }
 @Composable private fun ScheduleRows(schedules: List<ScheduleListItem>, hideDecimals: Boolean, onClick: () -> Unit) {
     val visible = schedules.filter { it.status !in setOf(ScheduleStatus.COMPLETED, ScheduleStatus.PAID) }.take(5)
-    if (visible.isEmpty()) HomeEmptyRow("No upcoming bills or schedules", onClick) else visible.forEach { HomeValueRow(it.title, scheduleLabel(it), it.schedule.postAmount, hideDecimals, onClick) }
+    if (visible.isEmpty()) HomeEmptyRow(stringResource(R.string.home_no_upcoming), onClick) else visible.forEach { HomeValueRow(it.title, scheduleLabel(it), it.schedule.postAmount, hideDecimals, onClick) }
 }
 @Composable private fun ThisMonthCard(transactions: List<Transaction>, hideDecimals: Boolean, onClick: () -> Unit) {
     var income = 0L
@@ -122,21 +128,38 @@ private fun HomeSectionHeader(title: String) = ActuaSectionHeader(title = title)
             it.amountCents < 0L -> spending -= it.amountCents
         }
     }
-    Card(Modifier.fillMaxWidth().padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.sm).clickable(onClick = onClick)) { Row(Modifier.fillMaxWidth().padding(Spacing.lg), horizontalArrangement = Arrangement.SpaceBetween) { SummaryValue("Income", income, hideDecimals); SummaryValue("Spent", spending, hideDecimals); Column { Text("Activity", style = MaterialTheme.typography.labelMedium); Text(transactions.size.toString(), fontWeight = FontWeight.SemiBold) } } }
+    Card(Modifier.fillMaxWidth().padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.sm).clickable(onClick = onClick)) { Row(Modifier.fillMaxWidth().padding(Spacing.lg), horizontalArrangement = Arrangement.SpaceBetween) { SummaryValue(stringResource(R.string.home_income), income, hideDecimals); SummaryValue(stringResource(R.string.home_spent), spending, hideDecimals); Column { Text(stringResource(R.string.home_activity), style = MaterialTheme.typography.labelMedium); Text(transactions.size.toString(), fontWeight = FontWeight.SemiBold) } } }
 }
 @Composable private fun SummaryValue(label: String, amount: Long, hideDecimals: Boolean) { Column { Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(formatMoneyCents(amount, hideDecimals), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
-@Composable private fun TransactionRows(transactions: List<Transaction>, hideDecimals: Boolean, onClick: () -> Unit) { if (transactions.isEmpty()) HomeEmptyRow("No recent activity", onClick) else transactions.take(5).forEach { HomeValueRow(it.payee.ifBlank { "Transaction" }, it.category.ifBlank { it.account }, it.amountCents, hideDecimals, onClick) } }
+@Composable private fun TransactionRows(transactions: List<Transaction>, hideDecimals: Boolean, onClick: () -> Unit) { if (transactions.isEmpty()) HomeEmptyRow(stringResource(R.string.home_no_recent_activity), onClick) else transactions.take(5).forEach { HomeValueRow(it.payee.ifBlank { stringResource(R.string.home_transaction) }, it.category.ifBlank { it.account }, it.amountCents, hideDecimals, onClick) } }
 @Composable private fun HomeValueRow(title: String, subtitle: String, amount: Long, hideDecimals: Boolean, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }; Text(formatMoneyCents(amount, hideDecimals), fontWeight = FontWeight.SemiBold) }; HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)) }
 @Composable private fun HomeEmptyRow(label: String, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.lg), verticalAlignment = Alignment.CenterVertically) { Text(label, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant); Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) } }
 @Composable private fun HomeDestinationRow(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = Spacing.screenHorizontal, vertical = Spacing.lg), verticalAlignment = Alignment.CenterVertically) { Icon(icon, contentDescription = null); Spacer(Modifier.width(Spacing.md)); Text(label, Modifier.weight(1f)); Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) } }
+@Composable
 private fun scheduleLabel(item: ScheduleListItem): String {
+    val locale = LocalConfiguration.current.locales[0]
     val due = item.schedule.nextDate?.let { date ->
         when (DayDate.today().daysUntil(date)) {
-            in Int.MIN_VALUE..-1 -> "Overdue"
-            0 -> "Due today"
-            1 -> "Due tomorrow"
-            else -> "Due ${date.iso}"
+            in Int.MIN_VALUE..-1 -> stringResource(R.string.home_overdue)
+            0 -> stringResource(R.string.home_due_today)
+            1 -> stringResource(R.string.home_due_tomorrow)
+            else -> stringResource(
+                R.string.home_due_date,
+                runCatching { LocalDate.parse(date.iso).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)) }
+                    .getOrDefault(date.iso),
+            )
         }
-    } ?: "Scheduled"
+    } ?: stringResource(R.string.home_scheduled)
     return listOfNotNull(due, item.accountName?.takeIf { it.isNotBlank() }).joinToString(" · ")
+}
+
+@Composable
+private fun accountTypeLabel(type: String): String = when (type.lowercase()) {
+    "checking" -> stringResource(R.string.home_account_checking)
+    "savings" -> stringResource(R.string.home_account_savings)
+    "credit" -> stringResource(R.string.home_account_credit)
+    "investment" -> stringResource(R.string.home_account_investment)
+    "mortgage" -> stringResource(R.string.home_account_mortgage)
+    "debt" -> stringResource(R.string.home_account_debt)
+    else -> type
 }
