@@ -1320,6 +1320,7 @@ fun AppNavigation(
             )
             DetailDestination.Connection -> ConnectionScreen(
                 onBack = { detail = DetailDestination.Main },
+                foregroundGeneration = foregroundGeneration,
                 onBeforeBudgetReplacement = {
                     if (!budgetReplacementInProgress) {
                         budgetReplacementInProgress = true
