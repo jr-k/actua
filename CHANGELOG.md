@@ -1,8 +1,10 @@
 # Changelog
 
-All notable user-facing changes to Actua are recorded here. This project uses [Semantic Versioning](https://semver.org/) where practical. Versions marked `alpha` are testing builds and may contain incomplete workflows or require a clean reinstall before a future production release.
+All notable user-facing changes to Actua are recorded here. Releases use calendar versions in `YYYY.M.D` format.
 
 ## Unreleased
+
+## [2026.9.1] - 2026-09-20
 
 ### Added
 
