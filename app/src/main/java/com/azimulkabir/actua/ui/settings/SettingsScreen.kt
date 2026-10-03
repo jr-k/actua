@@ -19,9 +19,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
@@ -44,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.azimulkabir.actua.BuildConfig
 import com.azimulkabir.actua.R
@@ -66,6 +70,11 @@ internal enum class SettingsPage(@StringRes val titleRes: Int, val depth: Int) {
 
 internal fun isForwardSettingsNavigation(from: SettingsPage, to: SettingsPage): Boolean =
     to.depth > from.depth
+
+data class BudgetSwitcherOption(
+    val id: String,
+    val name: String,
+)
 
 @Composable
 fun SettingsScreen(
@@ -114,6 +123,9 @@ fun SettingsScreen(
     onShowBottomNavigationLabelsChange: (Boolean) -> Unit = {},
     showCurrentBalanceSummary: Boolean = true,
     onShowCurrentBalanceSummaryChange: (Boolean) -> Unit = {},
+    budgetOptions: List<BudgetSwitcherOption> = emptyList(),
+    activeBudgetId: String? = null,
+    onBudgetChange: (String) -> Unit = {},
     returnToRootRequest: Int = 0,
 ) {
     val context = LocalContext.current
@@ -227,6 +239,13 @@ fun SettingsScreen(
                 onBack = if (shownPage != SettingsPage.Manage) ::navigateBack else null,
             ) {
                 if (shownPage == SettingsPage.Manage) {
+                    if (budgetOptions.isNotEmpty()) {
+                        BudgetSwitcher(
+                            options = budgetOptions,
+                            activeBudgetId = activeBudgetId,
+                            onBudgetChange = onBudgetChange,
+                        )
+                    }
                     IconButton(onClick = { page = SettingsPage.General }) {
                         Icon(
                             Icons.Outlined.Settings,
@@ -663,6 +682,62 @@ fun SettingsScreen(
                     )
                 }
                 SettingsPage.Tags -> Unit
+            }
+        }
+    }
+}
+
+@Composable
+private fun BudgetSwitcher(
+    options: List<BudgetSwitcherOption>,
+    activeBudgetId: String?,
+    onBudgetChange: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val activeName = options.firstOrNull { it.id == activeBudgetId }?.name
+        ?: stringResource(R.string.settings_budget)
+
+    Box {
+        TextButton(
+            onClick = { expanded = true },
+            modifier = Modifier.widthIn(max = 152.dp),
+        ) {
+            Text(
+                text = activeName,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                Icons.Outlined.ArrowDropDown,
+                contentDescription = stringResource(R.string.settings_switch_budget),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = option.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    trailingIcon = {
+                        if (option.id == activeBudgetId) {
+                            Icon(
+                                Icons.Outlined.Check,
+                                contentDescription = stringResource(R.string.active),
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        if (option.id != activeBudgetId) onBudgetChange(option.id)
+                    },
+                )
             }
         }
     }
