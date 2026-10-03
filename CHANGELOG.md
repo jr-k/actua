@@ -4,6 +4,10 @@ All notable user-facing changes to Actua are recorded here. Releases use calenda
 
 ## Unreleased
 
+### Fixed
+
+- Fixed the Manage budget switcher disagreeing with the server budget list shown in Connection & Data ([#18](https://github.com/jr-k/actua/pull/18)).
+
 ## [2026.9.1] - 2026-09-20
 
 ### Added
