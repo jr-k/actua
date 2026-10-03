@@ -2281,13 +2281,22 @@ fun AppNavigation(
                         ) {
                             budgetReplacementInProgress = true
                             budgetReplacementCompleted = false
-                            repository.close()
-                            ActiveBudgetStore(context).budgetId = budgetId
-                            repositoryVersion += 1
-                            dataVersion += 1
-                            budgetReplacementCompleted = true
-                            CreditCardDueNotificationScheduler.refresh(context)
-                            WidgetUpdater.requestAll(context)
+                            coroutineScope.launch {
+                                // Let Compose draw the blocking overlay before closing the
+                                // current database and rebuilding every budget projection.
+                                withFrameNanos { }
+                                repository.close()
+                                ActiveBudgetStore(context).budgetId = budgetId
+                                repositoryVersion += 1
+                                dataVersion += 1
+
+                                // Keep the overlay through a frame backed by the new repository.
+                                withFrameNanos { }
+                                withFrameNanos { }
+                                budgetReplacementCompleted = true
+                                CreditCardDueNotificationScheduler.refresh(context)
+                                WidgetUpdater.requestAll(context)
+                            }
                         }
                     },
                     returnToRootRequest = rootRequests[MainDestination.Manage] ?: 0,
