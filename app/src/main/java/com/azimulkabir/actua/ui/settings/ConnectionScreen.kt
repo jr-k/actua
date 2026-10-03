@@ -216,6 +216,7 @@ fun ConnectionScreen(
     foregroundGeneration: Int = 0,
     onBeforeBudgetReplacement: () -> Unit = {},
     onBudgetInstalled: () -> Unit = {},
+    onBudgetCatalogLoaded: (List<RemoteBudgetFile>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -282,6 +283,7 @@ fun ConnectionScreen(
                 }
             } }.onSuccess { (usedUrl, budgets) ->
                 activeServerUrl = usedUrl; remoteBudgets = budgets
+                onBudgetCatalogLoaded(budgets)
                 message = if (budgets.isEmpty()) resources.getString(R.string.no_budgets_found) else null
             }
                 .onFailure { message = connectionErrorMessage(it, resources.getString(R.string.could_not_load_budgets), resources.getString(R.string.server_certificate_not_trusted_error)) }
@@ -414,6 +416,7 @@ fun ConnectionScreen(
                 fallbackServerUrl = result.fallbackUrl
                 activeServerUrl = result.activeUrl
                 remoteBudgets = result.budgets
+                onBudgetCatalogLoaded(result.budgets)
                 password = ""
                 connected = true
                 message = resources.getString(if (result.budgets.isEmpty()) R.string.connected_openid_no_budgets else R.string.connected_openid)
