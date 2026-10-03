@@ -8,6 +8,8 @@
     <string name="settings_page_privacy">Confidentialité</string>
     <string name="settings_page_about">À propos</string>
     <string name="settings_open_settings">Paramètres</string>
+    <string name="settings_budget">Budget</string>
+    <string name="settings_switch_budget">Changer de budget</string>
 
     <string name="settings_section_insights">Analyses</string>
     <string name="settings_reports">Rapports</string>
