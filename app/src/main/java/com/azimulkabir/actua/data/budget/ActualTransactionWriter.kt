@@ -36,32 +36,36 @@ class ActualTransactionWriter(
         return payee
     }
 
+    fun planPayee(name: String, planned: MutableMap<String, ActualPayee>): ActualPayee {
+        val clean = name.trim()
+        require(clean.isNotEmpty()) { "Payee name cannot be empty" }
+        val key = clean.lowercase()
+        database.findPayeeByName(clean)?.let { return it }
+        return planned.getOrPut(key) { ActualPayee(idFactory(), clean, null) }
+    }
+
     fun createTransaction(
         transaction: ActualTransaction,
         applyRules: Boolean = true,
         preserveCategory: Boolean = false,
     ): ActualTransaction? {
-        var final = transaction
-        if (applyRules && transaction.transferId == null) {
-            val result = RulesEngine.apply(transaction, database.fetchRules(), database.ruleContext())
-            if (result.isDeleted) return null
-            final = result.transaction
-            result.pendingPayeeName?.let { final = final.copy(payeeId = resolveOrCreatePayee(it).id) }
-            if (preserveCategory &&
-                !RuleChangeGuard.shouldApplyRuleChange("category", transaction.categoryId, final.categoryId)
-            ) {
-                final = final.copy(categoryId = transaction.categoryId)
-            }
-        }
-        if (database.fetchAccounts().any { it.id == final.accountId && it.offBudget }) {
-            final = final.copy(categoryId = null)
-        }
+        val final = prepareForCreate(transaction, applyRules, preserveCategory) ?: return null
         validateBase(final)
         require(!final.isParent && final.parentId == null) { "Use createSplit for split rows" }
         database.insertTransactions(listOf(final), fieldsForInsert(final))
         saveClock()
         return final
     }
+
+    fun prepareImportedTransaction(
+        transaction: ActualTransaction,
+        plannedPayees: MutableMap<String, ActualPayee>,
+    ): ActualTransaction? = prepareForCreate(
+        transaction,
+        applyRules = true,
+        preserveCategory = false,
+        plannedPayees = plannedPayees,
+    )
 
     fun createTransfer(source: ActualTransaction, target: ActualTransaction) {
         validateBase(source)
@@ -139,16 +143,69 @@ class ActualTransactionWriter(
         updates: List<Pair<ActualTransaction, ActualTransaction>> = emptyList(),
         inserts: List<ActualTransaction> = emptyList(),
         tombstoneIds: List<String> = emptyList(),
+        applyRulesToInserts: Boolean = false,
+        newPayees: List<ActualPayee> = emptyList(),
+        accountBalances: Map<String, Long> = emptyMap(),
     ) {
+        val finalInserts = if (applyRulesToInserts) {
+            inserts.mapNotNull { prepareForCreate(it, applyRules = true, preserveCategory = false) }
+        } else {
+            inserts
+        }
         updates.forEach { (_, updated) -> validateBase(updated) }
-        inserts.forEach(::validateBase)
+        finalInserts.forEach(::validateBase)
         val messages = updates.flatMap { (original, updated) ->
             val changed = changedFields(original, updated)
             fields("transactions", updated.id, transactionFields(updated).filterKeys { it in changed })
-        } + inserts.flatMap(::fieldsForInsert) +
-            tombstoneIds.map { message("transactions", it, "tombstone", 1) }
-        database.mutateTransactions(updates.map { it.second }, inserts, tombstoneIds, messages)
+        } + finalInserts.flatMap(::fieldsForInsert) +
+            tombstoneIds.map { message("transactions", it, "tombstone", 1) } +
+            newPayees.flatMap { payee ->
+                fields("payees", payee.id, linkedMapOf(
+                    "name" to payee.name,
+                    "transfer_acct" to null,
+                    "tombstone" to 0,
+                )) + fields("payee_mapping", payee.id, mapOf("targetId" to payee.id))
+            } +
+            accountBalances.flatMap { (accountId, balance) ->
+                fields("accounts", accountId, mapOf("balance_current" to balance))
+            }
+        database.mutateTransactions(
+            updates.map { it.second },
+            finalInserts,
+            tombstoneIds,
+            newPayees,
+            accountBalances,
+            messages,
+        )
         saveClock()
+    }
+
+    private fun prepareForCreate(
+        transaction: ActualTransaction,
+        applyRules: Boolean,
+        preserveCategory: Boolean,
+        plannedPayees: MutableMap<String, ActualPayee>? = null,
+    ): ActualTransaction? {
+        var final = transaction
+        if (applyRules && transaction.transferId == null && !transaction.startingBalance) {
+            val result = RulesEngine.apply(transaction, database.fetchRules(), database.ruleContext())
+            if (result.isDeleted) return null
+            final = result.transaction
+            result.pendingPayeeName?.let { payeeName ->
+                val payee = plannedPayees?.let { planPayee(payeeName, it) }
+                    ?: resolveOrCreatePayee(payeeName)
+                final = final.copy(payeeId = payee.id)
+            }
+            if (preserveCategory &&
+                !RuleChangeGuard.shouldApplyRuleChange("category", transaction.categoryId, final.categoryId)
+            ) {
+                final = final.copy(categoryId = transaction.categoryId)
+            }
+        }
+        if (database.fetchAccounts().any { it.id == final.accountId && it.offBudget }) {
+            final = final.copy(categoryId = null)
+        }
+        return final
     }
 
     private fun validateBase(transaction: ActualTransaction) {
@@ -177,6 +234,8 @@ class ActualTransactionWriter(
         "tombstone" to if (transaction.tombstone) 1 else 0,
         "sort_order" to (transaction.sortOrder ?: System.currentTimeMillis().toDouble()),
         "imported_description" to transaction.importedPayee,
+        "financial_id" to transaction.importedId,
+        "raw_synced_data" to transaction.rawSyncedData,
         "schedule" to transaction.scheduleId,
         "starting_balance_flag" to if (transaction.startingBalance) 1 else 0,
     )
@@ -196,6 +255,7 @@ class ActualTransactionWriter(
         private val mutableTransactionFields = setOf(
             "acct", "date", "description", "category", "amount", "notes", "cleared",
             "reconciled", "transferred_id", "isParent", "parent_id", "tombstone", "schedule",
+            "imported_description", "financial_id", "raw_synced_data",
         )
 
         fun changedFields(original: ActualTransaction, updated: ActualTransaction): Set<String> = buildSet {
@@ -209,6 +269,9 @@ class ActualTransactionWriter(
             if (original.reconciled != updated.reconciled) add("reconciled")
             if (original.transferId != updated.transferId) add("transferred_id")
             if (original.scheduleId != updated.scheduleId) add("schedule")
+            if (original.importedPayee != updated.importedPayee) add("imported_description")
+            if (original.importedId != updated.importedId) add("financial_id")
+            if (original.rawSyncedData != updated.rawSyncedData) add("raw_synced_data")
             if (original.isParent != updated.isParent) add("isParent")
             if (original.parentId != updated.parentId) add("parent_id")
             if (original.tombstone != updated.tombstone) add("tombstone")

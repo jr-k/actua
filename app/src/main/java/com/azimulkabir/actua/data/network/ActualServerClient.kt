@@ -29,6 +29,8 @@ sealed class ActualServerException(message: String) : Exception(message) {
     data object FileNotFound : ActualServerException("Budget file not found")
     data object InvalidResponse : ActualServerException("The server returned an invalid response")
     class Http(val status: Int, body: String) : ActualServerException("HTTP $status: $body")
+    class BankSync(val category: String, val code: String) :
+        ActualServerException("Bank sync failed ($category: $code)")
 }
 
 data class ActualHttpRequest(
@@ -36,6 +38,7 @@ data class ActualHttpRequest(
     val method: String,
     val headers: Map<String, String> = emptyMap(),
     val body: ByteArray? = null,
+    val readTimeoutMillis: Int = 30_000,
 )
 data class ActualHttpResponse(val status: Int, val body: ByteArray)
 fun interface ActualHttpTransport { fun execute(request: ActualHttpRequest): ActualHttpResponse }
@@ -63,7 +66,7 @@ class UrlConnectionTransport(
         return try {
             connection.requestMethod = request.method
             connection.connectTimeout = 15_000
-            connection.readTimeout = 30_000
+            connection.readTimeout = request.readTimeoutMillis
             request.headers.forEach(connection::setRequestProperty)
             request.body?.let { body ->
                 connection.doOutput = true
@@ -255,6 +258,41 @@ class ActualServerClient(private val transport: ActualHttpTransport = UrlConnect
         return response.body
     }
 
+    fun downloadEnableBankingTransactions(
+        serverUrl: String,
+        token: String,
+        accountId: String,
+        startDate: String,
+        bankName: String?,
+    ): JSONObject {
+        val body = JSONObject()
+            .put("accountId", accountId)
+            .put("startDate", startDate)
+            .apply { if (!bankName.isNullOrBlank()) put("aspspName", bankName) }
+            .toString()
+            .encodeToByteArray()
+        val response = request(
+            serverUrl = serverUrl,
+            path = "/enablebanking/transactions",
+            method = "POST",
+            headers = actualHeaders(token) + ("Content-Type" to "application/json"),
+            body = body,
+            readTimeoutMillis = 60_000,
+        )
+        checkAuthorization(response)
+        requireSuccess(response)
+        val json = response.json()
+        val errorCode = json.optString("error_code").takeIf(String::isNotBlank)
+            ?: json.optString("error").takeIf(String::isNotBlank)
+        if (errorCode != null) {
+            throw ActualServerException.BankSync(
+                category = json.optString("error_type", "Connection"),
+                code = errorCode,
+            )
+        }
+        return json
+    }
+
     private fun authenticatedGet(serverUrl: String, path: String, token: String): ActualHttpResponse {
         val response = request(serverUrl, path, "GET", actualHeaders(token))
         checkAuthorization(response)
@@ -268,10 +306,12 @@ class ActualServerClient(private val transport: ActualHttpTransport = UrlConnect
         method: String,
         headers: Map<String, String> = emptyMap(),
         body: ByteArray? = null,
+        readTimeoutMillis: Int = 30_000,
     ): ActualHttpResponse = transport.execute(
         ActualHttpRequest(
             URL(normalizeServerUrl(serverUrl) + path), method,
             mapOf("Accept" to "application/json") + customHeaders + headers, body,
+            readTimeoutMillis,
         ),
     )
 

@@ -17,6 +17,11 @@
     <string name="accounts_search">Rechercher dans Actua</string>
     <string name="accounts_add">Ajouter un compte</string>
     <string name="accounts_display_options">Options d’affichage des comptes</string>
+    <string name="accounts_bank_sync">Synchroniser les connexions bancaires</string>
+    <string name="accounts_bank_sync_unavailable">Synchronisation bancaire non configurée</string>
+    <string name="accounts_bank_sync_success">Synchronisation bancaire terminée : %1$d ajoutées, %2$d mises à jour</string>
+    <string name="accounts_bank_sync_partial">Synchronisation terminée pour %1$d comptes sur %2$d : %3$d ajoutées, %4$d mises à jour. Échec : %5$s</string>
+    <string name="accounts_bank_sync_failed">Échec de la synchronisation bancaire</string>
     <string name="accounts_monthly_summary">Résumé mensuel</string>
     <string name="accounts_expand_all">Tout développer</string>
     <string name="accounts_collapse_all">Tout réduire</string>

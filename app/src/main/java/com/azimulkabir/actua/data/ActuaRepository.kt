@@ -17,6 +17,8 @@ import com.azimulkabir.actua.data.budget.model.ActualCategoryGroup
 import com.azimulkabir.actua.data.budget.model.ActualTransaction
 import com.azimulkabir.actua.data.budget.BudgetFileManager
 import com.azimulkabir.actua.data.budget.BudgetOpenProbe
+import com.azimulkabir.actua.data.bank.BankSyncResult
+import com.azimulkabir.actua.data.bank.EnableBankingSyncService
 import com.azimulkabir.actua.data.importing.ImportCandidate
 import com.azimulkabir.actua.data.location.Coordinates
 import com.azimulkabir.actua.data.location.PayeeLocationWriter
@@ -106,6 +108,9 @@ class ActuaRepository(context: Context) {
         opened
     }
     private val actualWriter = actualDatabase?.let { ActualTransactionWriter(it, onWrite = scheduleSync) }
+    private val enableBankingSync = actualDatabase?.let {
+        EnableBankingSyncService(appContext, it, requireNotNull(actualWriter))
+    }
     private val actualEntities = actualDatabase?.let { ActualEntityWriter(it, onWrite = scheduleSync) }
     private val actualBudgets = actualDatabase?.let { ActualBudgetWriter(it, onWrite = scheduleSync) }
     private val actualSchedules = actualDatabase?.let { ActualScheduleWriter(it, onWrite = scheduleSync) }
@@ -117,6 +122,11 @@ class ActuaRepository(context: Context) {
     }
 
     val isUsingActualBudget: Boolean get() = actualDatabase != null
+
+    fun hasLinkedBankAccounts(): Boolean = enableBankingSync?.hasLinkedAccounts() == true
+
+    fun syncLinkedBankAccounts(): BankSyncResult =
+        requireNotNull(enableBankingSync) { "Download and select a budget first." }.sync()
 
     fun close() {
         actualDatabase?.close()

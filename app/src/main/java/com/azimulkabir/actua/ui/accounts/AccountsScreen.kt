@@ -112,6 +112,9 @@ fun AccountsScreen(
     onSearch: () -> Unit = {},
     syncing: Boolean = false,
     onSync: () -> Unit = {},
+    bankSyncAvailable: Boolean = false,
+    bankSyncing: Boolean = false,
+    onBankSync: () -> Unit = {},
     favoriteAccountIds: Set<String> = emptySet(),
     onFavoriteAccountChange: (String, Boolean) -> Unit = { _, _ -> },
     scrollToTopRequest: Int = 0,
@@ -174,6 +177,32 @@ fun AccountsScreen(
                             expanded = accountMenuExpanded,
                             onDismissRequest = { accountMenuExpanded = false },
                         ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(
+                                            if (bankSyncAvailable) R.string.accounts_bank_sync
+                                            else R.string.accounts_bank_sync_unavailable,
+                                        ),
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (bankSyncing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                    } else {
+                                        Icon(Icons.Outlined.Sync, contentDescription = null)
+                                    }
+                                },
+                                enabled = bankSyncAvailable && !bankSyncing && !syncing,
+                                onClick = {
+                                    accountMenuExpanded = false
+                                    onBankSync()
+                                },
+                            )
+                            HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.accounts_monthly_summary)) },
                                 trailingIcon = {

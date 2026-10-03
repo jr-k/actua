@@ -310,6 +310,7 @@ fun AppNavigation(
     }
     val budgetOverview = remember(dataVersion, budgetMonth) { repository.budgetOverview(budgetMonth) }
     val accounts = remember(dataVersion) { repository.accounts() }
+    val bankSyncAvailable = remember(repository, dataVersion) { repository.hasLinkedBankAccounts() }
     var hideReconciledTransactions by remember {
         mutableStateOf(displayPreferences.hideReconciledTransactions)
     }
@@ -379,6 +380,7 @@ fun AppNavigation(
     var addOrigin by rememberSaveable { mutableStateOf(MainDestination.Accounts) }
     var transactionFabExpanded by rememberSaveable { mutableStateOf(true) }
     var accountsSyncing by remember { mutableStateOf(false) }
+    var bankSyncing by remember { mutableStateOf(false) }
     var transactionsRefreshing by remember { mutableStateOf(false) }
     var reconcileOpen by remember { mutableStateOf(false) }
     var scheduleReturnsToBills by rememberSaveable { mutableStateOf(false) }
@@ -500,6 +502,59 @@ fun AppNavigation(
                 errorMessage = error.message?.takeIf(String::isNotBlank) ?: "Sync failed."
             } finally {
                 accountsSyncing = false
+            }
+        }
+    }
+
+    fun syncBankConnections() {
+        if (bankSyncing || accountsSyncing || syncStatus.running || !bankSyncAvailable) return
+        bankSyncing = true
+        coroutineScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    when (ActualSyncRunner.run(context, trigger = "Before bank sync")) {
+                        is SyncRunResult.Success -> Unit
+                        SyncRunResult.NotConfigured ->
+                            throw IllegalStateException("Download and select a budget first.")
+                        SyncRunResult.EncryptionKeyUnavailable ->
+                            throw IllegalStateException("Unlock this encrypted budget before syncing banks.")
+                    }
+                    val bankResult = repository.syncLinkedBankAccounts()
+                    when (ActualSyncRunner.run(context, trigger = "Bank sync")) {
+                        is SyncRunResult.Success -> Unit
+                        SyncRunResult.NotConfigured ->
+                            throw IllegalStateException("Bank transactions were saved locally but could not be synchronized.")
+                        SyncRunResult.EncryptionKeyUnavailable ->
+                            throw IllegalStateException("Bank transactions were saved locally but the encrypted budget is locked.")
+                    }
+                    CreditCardDueNotificationScheduler.refresh(appContext)
+                    WidgetUpdater.requestAll(appContext)
+                    bankResult
+                }
+                dataVersion += 1
+                errorMessage = if (result.failedAccounts.isEmpty()) {
+                    resources.getString(
+                        R.string.accounts_bank_sync_success,
+                        result.added,
+                        result.updated,
+                    )
+                } else {
+                    resources.getString(
+                        R.string.accounts_bank_sync_partial,
+                        result.accountsSucceeded,
+                        result.accountsAttempted,
+                        result.added,
+                        result.updated,
+                        result.failedAccounts.joinToString(),
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                errorMessage = error.message?.takeIf(String::isNotBlank)
+                    ?: resources.getString(R.string.accounts_bank_sync_failed)
+            } finally {
+                bankSyncing = false
             }
         }
     }
@@ -1937,8 +1992,11 @@ fun AppNavigation(
                         }
                     },
                     onSearch = { detail = DetailDestination.Search },
-                    syncing = accountsSyncing || syncStatus.running,
+                    syncing = accountsSyncing || bankSyncing || syncStatus.running,
                     onSync = ::syncFromAccounts,
+                    bankSyncAvailable = bankSyncAvailable,
+                    bankSyncing = bankSyncing,
+                    onBankSync = ::syncBankConnections,
                     favoriteAccountIds = favoriteAccountIds,
                     onFavoriteAccountChange = { id, favorite ->
                         favoritePreferences.set(favoriteBudgetId, FavoritePreferences.Type.ACCOUNT, id, favorite)

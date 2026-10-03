@@ -29,6 +29,14 @@ data class ActualAccount(
     val reconciledCents: Long = 0,
 )
 
+data class ActualBankSyncAccount(
+    val id: String,
+    val name: String,
+    val externalAccountId: String,
+    val provider: String,
+    val bankName: String?,
+)
+
 data class ActualPayee(
     val id: String,
     val name: String,
@@ -84,6 +92,8 @@ data class ActualTransaction(
     val startingBalance: Boolean = false,
     val splitPortions: List<SplitPortion> = emptyList(),
     val categoryIsIncome: Boolean? = null,
+    val importedId: String? = null,
+    val rawSyncedData: String? = null,
 ) {
     data class SplitPortion(
         val id: String,
