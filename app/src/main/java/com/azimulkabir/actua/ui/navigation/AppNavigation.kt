@@ -127,6 +127,11 @@ import com.azimulkabir.actua.data.ActuaRepository
 import com.azimulkabir.actua.data.location.AndroidLocationProvider
 import com.azimulkabir.actua.data.location.CurrentLocationResult
 import com.azimulkabir.actua.data.location.LocationUtils
+import com.azimulkabir.actua.data.network.ActualServerClient
+import com.azimulkabir.actua.data.network.RemoteBudgetFile
+import com.azimulkabir.actua.data.network.TrustedCertificateStore
+import com.azimulkabir.actua.data.network.UrlConnectionTransport
+import com.azimulkabir.actua.data.security.CredentialStore
 import com.azimulkabir.actua.data.sync.ActualSyncRunner
 import com.azimulkabir.actua.data.sync.ActualSyncScheduler
 import com.azimulkabir.actua.data.sync.SYNC_TRIGGER_AFTER_CHANGE
@@ -288,13 +293,51 @@ fun AppNavigation(
     var budgetReplacementCompleted by remember { mutableStateOf(false) }
     val activeBudgetId = remember(repositoryVersion) { ActiveBudgetStore(context).budgetId }
     val favoriteBudgetId = activeBudgetId ?: "no-budget"
-    val budgetSwitcherOptions = remember(repositoryVersion) {
-        BudgetFileManager(context).listLocalBudgets().map { budget ->
+    val localBudgets = remember(repositoryVersion) { BudgetFileManager(context).listLocalBudgets() }
+    var remoteBudgetCatalog by remember { mutableStateOf<List<RemoteBudgetFile>?>(null) }
+    LaunchedEffect(repositoryVersion, foregroundGeneration) {
+        remoteBudgetCatalog = withContext(Dispatchers.IO) {
+            val credentials = CredentialStore(appContext)
+            val token = credentials.token() ?: return@withContext null
+            val primaryUrl = credentials.serverUrl.takeIf(String::isNotBlank) ?: return@withContext null
+            val fallbackUrl = credentials.fallbackServerUrl.takeIf {
+                it.isNotBlank() && it != primaryUrl
+            }
+            val client = ActualServerClient(
+                UrlConnectionTransport(TrustedCertificateStore(appContext)),
+            ).apply {
+                customHeaders = credentials.customHeaders
+            }
+            runCatching {
+                client.listFiles(primaryUrl, token)
+            }.recoverCatching { primaryError ->
+                fallbackUrl?.let { client.listFiles(it, token) } ?: throw primaryError
+            }.getOrNull()
+        }
+    }
+    val budgetSwitcherOptions = remember(localBudgets, remoteBudgetCatalog) {
+        remoteBudgetCatalog?.let { remoteBudgets ->
+            val localByCloudId = localBudgets
+                .filter { !it.cloudFileId.isNullOrBlank() }
+                .associateBy { it.cloudFileId }
+            remoteBudgets.map { remote ->
+                val local = localByCloudId[remote.fileId]
+                BudgetSwitcherOption(
+                    id = local?.id ?: remote.fileId,
+                    name = remote.name,
+                    availableLocally = local != null,
+                )
+            }
+        } ?: localBudgets.map { budget ->
             BudgetSwitcherOption(
                 id = budget.id,
                 name = budget.budgetName ?: budget.id,
             )
         }
+    }
+    val activeBudgetName = remember(activeBudgetId, localBudgets, budgetSwitcherOptions) {
+        budgetSwitcherOptions.firstOrNull { it.id == activeBudgetId }?.name
+            ?: localBudgets.firstOrNull { it.id == activeBudgetId }?.budgetName
     }
     val repository = remember(repositoryVersion) { ActuaRepository(context) }
     var dataVersion by remember { mutableStateOf(0) }
@@ -1410,6 +1453,7 @@ fun AppNavigation(
                     if (budgetReplacementInProgress) budgetReplacementCompleted = true
                     CreditCardDueNotificationScheduler.refresh(context)
                 },
+                onBudgetCatalogLoaded = { remoteBudgetCatalog = it },
                 modifier = contentModifier,
             )
             DetailDestination.CreditCards -> CreditCardsScreen(
@@ -2229,9 +2273,10 @@ fun AppNavigation(
                     },
                     budgetOptions = budgetSwitcherOptions,
                     activeBudgetId = activeBudgetId,
+                    activeBudgetName = activeBudgetName,
                     onBudgetChange = { budgetId ->
                         if (budgetId != activeBudgetId &&
-                            budgetSwitcherOptions.any { it.id == budgetId } &&
+                            budgetSwitcherOptions.any { it.id == budgetId && it.availableLocally } &&
                             !budgetReplacementInProgress
                         ) {
                             budgetReplacementInProgress = true

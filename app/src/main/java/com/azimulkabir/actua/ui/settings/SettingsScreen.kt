@@ -74,6 +74,7 @@ internal fun isForwardSettingsNavigation(from: SettingsPage, to: SettingsPage): 
 data class BudgetSwitcherOption(
     val id: String,
     val name: String,
+    val availableLocally: Boolean = true,
 )
 
 @Composable
@@ -125,6 +126,7 @@ fun SettingsScreen(
     onShowCurrentBalanceSummaryChange: (Boolean) -> Unit = {},
     budgetOptions: List<BudgetSwitcherOption> = emptyList(),
     activeBudgetId: String? = null,
+    activeBudgetName: String? = null,
     onBudgetChange: (String) -> Unit = {},
     returnToRootRequest: Int = 0,
 ) {
@@ -243,6 +245,7 @@ fun SettingsScreen(
                         BudgetSwitcher(
                             options = budgetOptions,
                             activeBudgetId = activeBudgetId,
+                            activeBudgetName = activeBudgetName,
                             onBudgetChange = onBudgetChange,
                         )
                     }
@@ -691,10 +694,12 @@ fun SettingsScreen(
 private fun BudgetSwitcher(
     options: List<BudgetSwitcherOption>,
     activeBudgetId: String?,
+    activeBudgetName: String?,
     onBudgetChange: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val activeName = options.firstOrNull { it.id == activeBudgetId }?.name
+        ?: activeBudgetName
         ?: stringResource(R.string.settings_budget)
 
     Box {
@@ -733,9 +738,12 @@ private fun BudgetSwitcher(
                             )
                         }
                     },
+                    enabled = option.availableLocally,
                     onClick = {
                         expanded = false
-                        if (option.id != activeBudgetId) onBudgetChange(option.id)
+                        if (option.availableLocally && option.id != activeBudgetId) {
+                            onBudgetChange(option.id)
+                        }
                     },
                 )
             }
