@@ -17,6 +17,11 @@
     <string name="accounts_search">Search Actua</string>
     <string name="accounts_add">Add account</string>
     <string name="accounts_display_options">Account display options</string>
+    <string name="accounts_bank_sync">Sync bank connections</string>
+    <string name="accounts_bank_sync_unavailable">Bank sync isn’t configured</string>
+    <string name="accounts_bank_sync_success">Bank sync complete: %1$d added, %2$d updated</string>
+    <string name="accounts_bank_sync_partial">Bank sync complete for %1$d of %2$d accounts: %3$d added, %4$d updated. Failed: %5$s</string>
+    <string name="accounts_bank_sync_failed">Bank synchronization failed</string>
     <string name="accounts_monthly_summary">Monthly summary</string>
     <string name="accounts_expand_all">Expand all</string>
     <string name="accounts_collapse_all">Collapse all</string>

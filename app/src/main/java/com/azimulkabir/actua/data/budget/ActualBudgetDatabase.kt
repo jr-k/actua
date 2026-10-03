@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
 import com.azimulkabir.actua.data.budget.model.ActualAccount
 import com.azimulkabir.actua.data.budget.model.ActualAccountType
+import com.azimulkabir.actua.data.budget.model.ActualBankSyncAccount
 import com.azimulkabir.actua.data.budget.model.ActualCategory
 import com.azimulkabir.actua.data.budget.model.ActualCategoryGroup
 import com.azimulkabir.actua.data.budget.model.ActualCleanupGroup
@@ -101,6 +102,45 @@ class ActualBudgetDatabase private constructor(
             }
         }
         return result
+    }
+
+    @Synchronized
+    fun fetchEnableBankingAccounts(): List<ActualBankSyncAccount> {
+        if (!hasTable("banks")) return emptyList()
+        val result = mutableListOf<ActualBankSyncAccount>()
+        database.rawQuery(
+            """
+                SELECT a.id, a.name, a.account_id, a.account_sync_source, b.name
+                FROM accounts a
+                LEFT JOIN banks b ON b.id = a.bank
+                WHERE (a.tombstone = 0 OR a.tombstone IS NULL)
+                  AND (a.closed = 0 OR a.closed IS NULL)
+                  AND a.account_sync_source = 'enableBanking'
+                  AND a.account_id IS NOT NULL AND a.account_id != ''
+                ORDER BY a.offbudget, a.sort_order
+            """.trimIndent(),
+            null,
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                result += ActualBankSyncAccount(
+                    id = cursor.getString(0),
+                    name = cursor.stringOrNull(1).orEmpty(),
+                    externalAccountId = cursor.getString(2),
+                    provider = cursor.getString(3),
+                    bankName = cursor.stringOrNull(4),
+                )
+            }
+        }
+        return result
+    }
+
+    @Synchronized
+    fun fetchPreference(id: String): String? {
+        if (!hasTable("preferences")) return null
+        return database.rawQuery(
+            "SELECT value FROM preferences WHERE id = ?",
+            arrayOf(id),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.stringOrNull(0) else null }
     }
 
     @Synchronized
@@ -602,8 +642,22 @@ class ActualBudgetDatabase private constructor(
         updates: List<ActualTransaction>,
         inserts: List<ActualTransaction>,
         tombstoneIds: List<String>,
+        newPayees: List<ActualPayee>,
+        accountBalances: Map<String, Long>,
+        accountLastSync: Map<String, String>,
+        accountSyncStatuses: Map<String, String>,
         messages: List<CrdtMessage>,
     ) = transaction {
+        newPayees.forEach { payee ->
+            database.execSQL(
+                "INSERT INTO payees (id, name, transfer_acct, tombstone) VALUES (?, ?, ?, 0)",
+                arrayOf(payee.id, payee.name, payee.transferAccountId),
+            )
+            database.execSQL(
+                "INSERT INTO payee_mapping (id, targetId) VALUES (?, ?)",
+                arrayOf(payee.id, payee.id),
+            )
+        }
         updates.forEach { item ->
             check(database.update("transactions", transactionValues(item, false), "id = ?", arrayOf(item.id)) == 1) {
                 "Transaction ${item.id} does not exist"
@@ -612,6 +666,21 @@ class ActualBudgetDatabase private constructor(
         inserts.forEach(::insertTransactionRow)
         tombstoneIds.forEach { id ->
             database.update("transactions", ContentValues().apply { put("tombstone", 1) }, "id = ?", arrayOf(id))
+        }
+        (accountBalances.keys + accountLastSync.keys + accountSyncStatuses.keys).forEach { accountId ->
+            val values = ContentValues().apply {
+                accountBalances[accountId]?.let { put("balance_current", it) }
+                accountLastSync[accountId]?.let { put("last_sync", it) }
+                accountSyncStatuses[accountId]?.let { put("bank_sync_status", it) }
+            }
+            check(
+                database.update(
+                    "accounts",
+                    values,
+                    "id = ?",
+                    arrayOf(accountId),
+                ) == 1,
+            ) { "Account $accountId does not exist" }
         }
         insertMessageRows(messages)
     }
@@ -637,6 +706,8 @@ class ActualBudgetDatabase private constructor(
         put("tombstone", if (transaction.tombstone) 1 else 0)
         if (includeCreationFields) put("sort_order", transaction.sortOrder ?: System.currentTimeMillis().toDouble())
         putOrNull("imported_description", transaction.importedPayee)
+        putOrNull("financial_id", transaction.importedId)
+        putOrNull("raw_synced_data", transaction.rawSyncedData)
         putOrNull("schedule", transaction.scheduleId)
         put("starting_balance_flag", if (transaction.startingBalance) 1 else 0)
     }
@@ -1102,6 +1173,8 @@ class ActualBudgetDatabase private constructor(
         transferAccountId = string("transfer_acct"),
         startingBalance = int("starting_balance_flag") == 1,
         categoryIsIncome = intOrNull(getColumnIndexOrThrow("category_is_income"))?.let { it == 1 },
+        importedId = string("financial_id"),
+        rawSyncedData = string("raw_synced_data"),
     )
 
     private fun android.database.Cursor.string(name: String) = stringOrNull(getColumnIndexOrThrow(name))
@@ -1355,7 +1428,7 @@ class ActualBudgetDatabase private constructor(
             SELECT t.id, t.isParent, t.isChild, t.acct, t.category, t.amount,
                    t.description, t.notes, t.date, t.imported_description, t.schedule,
                    t.transferred_id, t.cleared, t.reconciled, t.sort_order,
-                   t.tombstone, t.parent_id,
+                   t.tombstone, t.parent_id, t.financial_id, t.raw_synced_data,
                    COALESCE(pa.name, p.name, cpa.name, cp.name) AS payee_name,
                    c.name AS category_name, p.transfer_acct AS transfer_acct,
                    t.starting_balance_flag, c.is_income AS category_is_income
@@ -1389,7 +1462,8 @@ class ActualBudgetDatabase private constructor(
             SELECT t.id, t.isParent, t.isChild, t.acct, t.category, t.amount,
                    t.description, t.notes, t.date, t.imported_description, t.schedule,
                    t.transferred_id, t.cleared, t.reconciled, t.sort_order,
-                   t.tombstone, t.parent_id, COALESCE(pa.name, p.name) AS payee_name,
+                   t.tombstone, t.parent_id, t.financial_id, t.raw_synced_data,
+                   COALESCE(pa.name, p.name) AS payee_name,
                    c.name AS category_name, p.transfer_acct AS transfer_acct,
                    t.starting_balance_flag, c.is_income AS category_is_income
             FROM transactions t
@@ -1418,6 +1492,7 @@ class ActualBudgetDatabase private constructor(
             ColumnMigration(1694438752002, "categories", "goal_def", "TEXT DEFAULT null"),
             ColumnMigration(1720665000000, "zero_budgets", "long_goal", "INTEGER DEFAULT null"),
             ColumnMigration(1720665000001, "reflect_budgets", "long_goal", "INTEGER DEFAULT null"),
+            ColumnMigration(1739139550000, "transactions", "raw_synced_data", "TEXT"),
             ColumnMigration(1754611200000, "categories", "template_settings", "JSON DEFAULT '{\"source\": \"notes\"}'"),
             ColumnMigration(1778510362741, "categories", "cleanup_def", "TEXT DEFAULT NULL"),
             ColumnMigration(1780606214999, "transactions", "schedule", "TEXT"),

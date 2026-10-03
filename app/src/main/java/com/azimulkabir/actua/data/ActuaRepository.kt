@@ -17,6 +17,8 @@ import com.azimulkabir.actua.data.budget.model.ActualCategoryGroup
 import com.azimulkabir.actua.data.budget.model.ActualTransaction
 import com.azimulkabir.actua.data.budget.BudgetFileManager
 import com.azimulkabir.actua.data.budget.BudgetOpenProbe
+import com.azimulkabir.actua.data.bank.BankSyncResult
+import com.azimulkabir.actua.data.bank.EnableBankingSyncService
 import com.azimulkabir.actua.data.importing.ImportCandidate
 import com.azimulkabir.actua.data.location.Coordinates
 import com.azimulkabir.actua.data.location.PayeeLocationWriter
@@ -117,6 +119,20 @@ class ActuaRepository(context: Context) {
     }
 
     val isUsingActualBudget: Boolean get() = actualDatabase != null
+
+    fun hasLinkedBankAccounts(): Boolean =
+        actualDatabase?.fetchEnableBankingAccounts()?.isNotEmpty() == true
+
+    fun syncLinkedBankAccounts(): BankSyncResult {
+        val database = requireNotNull(actualDatabase) { "Download and select a budget first." }
+        // Recreate the writer after the pre-bank cloud sync so its HLC starts at the newly
+        // received message-log high-water mark. Scheduling is handled after the post-bank sync.
+        return EnableBankingSyncService(
+            appContext,
+            database,
+            ActualTransactionWriter(database),
+        ).sync()
+    }
 
     fun close() {
         actualDatabase?.close()
