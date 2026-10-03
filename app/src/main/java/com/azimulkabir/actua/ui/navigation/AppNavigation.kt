@@ -127,6 +127,7 @@ import com.azimulkabir.actua.data.location.AndroidLocationProvider
 import com.azimulkabir.actua.data.location.CurrentLocationResult
 import com.azimulkabir.actua.data.location.LocationUtils
 import com.azimulkabir.actua.data.sync.ActualSyncRunner
+import com.azimulkabir.actua.data.sync.ActualSyncScheduler
 import com.azimulkabir.actua.data.sync.SYNC_TRIGGER_AFTER_CHANGE
 import com.azimulkabir.actua.data.sync.SyncRunResult
 import com.azimulkabir.actua.data.sync.SyncSignals
@@ -512,24 +513,33 @@ fun AppNavigation(
         coroutineScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    when (ActualSyncRunner.run(context, trigger = "Before bank sync")) {
-                        is SyncRunResult.Success -> Unit
-                        SyncRunResult.NotConfigured ->
-                            throw IllegalStateException("Download and select a budget first.")
-                        SyncRunResult.EncryptionKeyUnavailable ->
-                            throw IllegalStateException("Unlock this encrypted budget before syncing banks.")
+                    ActualSyncRunner.runExclusive {
+                        when (ActualSyncRunner.run(context, trigger = "Before bank sync")) {
+                            is SyncRunResult.Success -> Unit
+                            SyncRunResult.NotConfigured ->
+                                throw IllegalStateException("Download and select a budget first.")
+                            SyncRunResult.EncryptionKeyUnavailable ->
+                                throw IllegalStateException("Unlock this encrypted budget before syncing banks.")
+                        }
+                        val bankResult = repository.syncLinkedBankAccounts()
+                        var postSyncCompleted = false
+                        try {
+                            when (ActualSyncRunner.run(context, trigger = "Bank sync")) {
+                                is SyncRunResult.Success -> postSyncCompleted = true
+                                SyncRunResult.NotConfigured ->
+                                    throw IllegalStateException("Bank transactions were saved locally but could not be synchronized.")
+                                SyncRunResult.EncryptionKeyUnavailable ->
+                                    throw IllegalStateException("Bank transactions were saved locally but the encrypted budget is locked.")
+                            }
+                        } finally {
+                            if (!postSyncCompleted) {
+                                ActualSyncScheduler.scheduleMutation(appContext)
+                            }
+                        }
+                        CreditCardDueNotificationScheduler.refresh(appContext)
+                        WidgetUpdater.requestAll(appContext)
+                        bankResult
                     }
-                    val bankResult = repository.syncLinkedBankAccounts()
-                    when (ActualSyncRunner.run(context, trigger = "Bank sync")) {
-                        is SyncRunResult.Success -> Unit
-                        SyncRunResult.NotConfigured ->
-                            throw IllegalStateException("Bank transactions were saved locally but could not be synchronized.")
-                        SyncRunResult.EncryptionKeyUnavailable ->
-                            throw IllegalStateException("Bank transactions were saved locally but the encrypted budget is locked.")
-                    }
-                    CreditCardDueNotificationScheduler.refresh(appContext)
-                    WidgetUpdater.requestAll(appContext)
-                    bankResult
                 }
                 dataVersion += 1
                 errorMessage = if (result.failedAccounts.isEmpty()) {

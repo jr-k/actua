@@ -146,6 +146,8 @@ class ActualTransactionWriter(
         applyRulesToInserts: Boolean = false,
         newPayees: List<ActualPayee> = emptyList(),
         accountBalances: Map<String, Long> = emptyMap(),
+        accountLastSync: Map<String, String> = emptyMap(),
+        accountSyncStatuses: Map<String, String> = emptyMap(),
     ) {
         val finalInserts = if (applyRulesToInserts) {
             inserts.mapNotNull { prepareForCreate(it, applyRules = true, preserveCategory = false) }
@@ -168,6 +170,10 @@ class ActualTransactionWriter(
             } +
             accountBalances.flatMap { (accountId, balance) ->
                 fields("accounts", accountId, mapOf("balance_current" to balance))
+            } + accountLastSync.flatMap { (accountId, lastSync) ->
+                fields("accounts", accountId, mapOf("last_sync" to lastSync))
+            } + accountSyncStatuses.flatMap { (accountId, status) ->
+                fields("accounts", accountId, mapOf("bank_sync_status" to status))
             }
         database.mutateTransactions(
             updates.map { it.second },
@@ -175,6 +181,8 @@ class ActualTransactionWriter(
             tombstoneIds,
             newPayees,
             accountBalances,
+            accountLastSync,
+            accountSyncStatuses,
             messages,
         )
         saveClock()

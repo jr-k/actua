@@ -48,8 +48,6 @@ class EnableBankingSyncService(
         customHeaders = credentials.customHeaders
     }
 
-    fun hasLinkedAccounts(): Boolean = database.fetchEnableBankingAccounts().isNotEmpty()
-
     fun sync(): BankSyncResult {
         val accounts = database.fetchEnableBankingAccounts()
         if (accounts.isEmpty()) {
@@ -68,6 +66,8 @@ class EnableBankingSyncService(
         val inserts = mutableListOf<ActualTransaction>()
         val plannedPayees = linkedMapOf<String, ActualPayee>()
         val accountBalances = mutableMapOf<String, Long>()
+        val accountLastSync = mutableMapOf<String, String>()
+        val accountSyncStatuses = mutableMapOf<String, String>()
         val failures = mutableListOf<String>()
         var succeeded = 0
 
@@ -107,6 +107,8 @@ class EnableBankingSyncService(
                 inserts += plan.inserts
                 plannedPayees.putAll(plan.payees)
                 plan.currentBalance?.let { accountBalances[account.id] = it }
+                accountLastSync[account.id] = System.currentTimeMillis().toString()
+                accountSyncStatuses[account.id] = "ok"
                 succeeded += 1
             }.onFailure { error ->
                 failures += when (error) {
@@ -126,13 +128,16 @@ class EnableBankingSyncService(
             .toSet()
         val newPayees = plannedPayees.values.filter { it.id in usedPayeeIds }
         if (updates.isNotEmpty() || inserts.isNotEmpty() ||
-            newPayees.isNotEmpty() || accountBalances.isNotEmpty()
+            newPayees.isNotEmpty() || accountBalances.isNotEmpty() ||
+            accountLastSync.isNotEmpty() || accountSyncStatuses.isNotEmpty()
         ) {
             writer.mutate(
                 updates = updates,
                 inserts = inserts,
                 newPayees = newPayees,
                 accountBalances = accountBalances,
+                accountLastSync = accountLastSync,
+                accountSyncStatuses = accountSyncStatuses,
             )
         }
         if (succeeded == 0) {

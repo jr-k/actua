@@ -42,6 +42,10 @@ object ActualSyncRunner {
     private var lastSuccessElapsedMillis: Long = Long.MIN_VALUE
     private var lastSuccess: SyncRunResult.Success? = null
 
+    /** Serializes a multi-step mutation flow with every foreground/background sync runner. */
+    @Synchronized
+    fun <T> runExclusive(block: () -> T): T = block()
+
     @Synchronized
     fun run(
         context: Context,

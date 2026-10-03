@@ -108,9 +108,6 @@ class ActuaRepository(context: Context) {
         opened
     }
     private val actualWriter = actualDatabase?.let { ActualTransactionWriter(it, onWrite = scheduleSync) }
-    private val enableBankingSync = actualDatabase?.let {
-        EnableBankingSyncService(appContext, it, requireNotNull(actualWriter))
-    }
     private val actualEntities = actualDatabase?.let { ActualEntityWriter(it, onWrite = scheduleSync) }
     private val actualBudgets = actualDatabase?.let { ActualBudgetWriter(it, onWrite = scheduleSync) }
     private val actualSchedules = actualDatabase?.let { ActualScheduleWriter(it, onWrite = scheduleSync) }
@@ -123,10 +120,19 @@ class ActuaRepository(context: Context) {
 
     val isUsingActualBudget: Boolean get() = actualDatabase != null
 
-    fun hasLinkedBankAccounts(): Boolean = enableBankingSync?.hasLinkedAccounts() == true
+    fun hasLinkedBankAccounts(): Boolean =
+        actualDatabase?.fetchEnableBankingAccounts()?.isNotEmpty() == true
 
-    fun syncLinkedBankAccounts(): BankSyncResult =
-        requireNotNull(enableBankingSync) { "Download and select a budget first." }.sync()
+    fun syncLinkedBankAccounts(): BankSyncResult {
+        val database = requireNotNull(actualDatabase) { "Download and select a budget first." }
+        // Recreate the writer after the pre-bank cloud sync so its HLC starts at the newly
+        // received message-log high-water mark. Scheduling is handled after the post-bank sync.
+        return EnableBankingSyncService(
+            appContext,
+            database,
+            ActualTransactionWriter(database),
+        ).sync()
+    }
 
     fun close() {
         actualDatabase?.close()

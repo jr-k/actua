@@ -644,6 +644,8 @@ class ActualBudgetDatabase private constructor(
         tombstoneIds: List<String>,
         newPayees: List<ActualPayee>,
         accountBalances: Map<String, Long>,
+        accountLastSync: Map<String, String>,
+        accountSyncStatuses: Map<String, String>,
         messages: List<CrdtMessage>,
     ) = transaction {
         newPayees.forEach { payee ->
@@ -665,11 +667,16 @@ class ActualBudgetDatabase private constructor(
         tombstoneIds.forEach { id ->
             database.update("transactions", ContentValues().apply { put("tombstone", 1) }, "id = ?", arrayOf(id))
         }
-        accountBalances.forEach { (accountId, balance) ->
+        (accountBalances.keys + accountLastSync.keys + accountSyncStatuses.keys).forEach { accountId ->
+            val values = ContentValues().apply {
+                accountBalances[accountId]?.let { put("balance_current", it) }
+                accountLastSync[accountId]?.let { put("last_sync", it) }
+                accountSyncStatuses[accountId]?.let { put("bank_sync_status", it) }
+            }
             check(
                 database.update(
                     "accounts",
-                    ContentValues().apply { put("balance_current", balance) },
+                    values,
                     "id = ?",
                     arrayOf(accountId),
                 ) == 1,
@@ -1485,6 +1492,7 @@ class ActualBudgetDatabase private constructor(
             ColumnMigration(1694438752002, "categories", "goal_def", "TEXT DEFAULT null"),
             ColumnMigration(1720665000000, "zero_budgets", "long_goal", "INTEGER DEFAULT null"),
             ColumnMigration(1720665000001, "reflect_budgets", "long_goal", "INTEGER DEFAULT null"),
+            ColumnMigration(1739139550000, "transactions", "raw_synced_data", "TEXT"),
             ColumnMigration(1754611200000, "categories", "template_settings", "JSON DEFAULT '{\"source\": \"notes\"}'"),
             ColumnMigration(1778510362741, "categories", "cleanup_def", "TEXT DEFAULT NULL"),
             ColumnMigration(1780606214999, "transactions", "schedule", "TEXT"),

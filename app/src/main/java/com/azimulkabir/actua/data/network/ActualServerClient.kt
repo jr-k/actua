@@ -282,15 +282,22 @@ class ActualServerClient(private val transport: ActualHttpTransport = UrlConnect
         checkAuthorization(response)
         requireSuccess(response)
         val json = response.json()
+        val data = json.optJSONObject("data")
         val errorCode = json.optString("error_code").takeIf(String::isNotBlank)
             ?: json.optString("error").takeIf(String::isNotBlank)
+            ?: data?.optString("error_code")?.takeIf(String::isNotBlank)
+            ?: data?.optString("error")?.takeIf(String::isNotBlank)
         if (errorCode != null) {
             throw ActualServerException.BankSync(
-                category = json.optString("error_type", "Connection"),
+                category = json.optString(
+                    "error_type",
+                    data?.optString("error_type", "Connection") ?: "Connection",
+                ),
                 code = errorCode,
             )
         }
-        return json
+        if (json.optString("status") != "ok") throw ActualServerException.InvalidResponse
+        return data ?: throw ActualServerException.InvalidResponse
     }
 
     private fun authenticatedGet(serverUrl: String, path: String, token: String): ActualHttpResponse {
